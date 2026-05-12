@@ -23,10 +23,6 @@ export const config = {
     from: process.env.EMAIL_FROM || 'Deeghayu Community <no-reply@deeghayu.org>',
   },
 
-  redis: {
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
-  },
-
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
     apiKey: process.env.CLOUDINARY_API_KEY || '',

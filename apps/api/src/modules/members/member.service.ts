@@ -1,11 +1,10 @@
-import { MemberStatus, Role } from '@prisma/client';
-import { prisma } from '../../config/database';
-import { NotFoundError, BadRequestError } from '../../utils/errors';
+import { pool } from '../../config/database';
+import { MemberStatus, Role } from '../../types';
+import { NotFoundError } from '../../utils/errors';
 import { getPagination, paginatedResponse } from '../../utils/pagination';
 import { generateMemberQr } from '../../utils/qrCode';
 import { generateExcel } from '../../utils/excelGenerator';
 import { generateReportPdf } from '../../utils/pdfGenerator';
-import { format } from 'date-fns';
 
 export class MemberService {
   async getAll(query: {
@@ -16,94 +15,195 @@ export class MemberService {
     role?: Role;
   }) {
     const { skip, take, page, limit } = getPagination(query);
-    const where: any = {};
+
+    const conditions: string[] = ['1=1'];
+    const params: any[] = [];
+    let i = 1;
 
     if (query.search) {
-      where.OR = [
-        { fullName: { contains: query.search, mode: 'insensitive' } },
-        { membershipId: { contains: query.search, mode: 'insensitive' } },
-        { nic: { contains: query.search, mode: 'insensitive' } },
-        { phone: { contains: query.search } },
-        { user: { email: { contains: query.search, mode: 'insensitive' } } },
-      ];
+      conditions.push(
+        `(m."fullName" ILIKE $${i} OR m."membershipId" ILIKE $${i} OR m.nic ILIKE $${i} OR m.phone ILIKE $${i} OR u.email ILIKE $${i})`
+      );
+      params.push(`%${query.search}%`);
+      i++;
     }
-    if (query.status) where.status = query.status;
-    if (query.role) where.user = { role: query.role };
+    if (query.status) {
+      conditions.push(`m.status = $${i}`);
+      params.push(query.status);
+      i++;
+    }
+    if (query.role) {
+      conditions.push(`u.role = $${i}`);
+      params.push(query.role);
+      i++;
+    }
 
-    const [members, total] = await Promise.all([
-      prisma.member.findMany({
-        where,
-        skip,
-        take,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          user: { select: { email: true, role: true } },
-          _count: { select: { payments: true, attendances: true } },
-        },
-      }),
-      prisma.member.count({ where }),
+    const where = conditions.join(' AND ');
+
+    const [dataResult, countResult] = await Promise.all([
+      pool.query(
+        `SELECT m.*,
+                u.email, u.role,
+                (SELECT COUNT(*) FROM payments WHERE "memberId" = m.id)::int AS "paymentCount",
+                (SELECT COUNT(*) FROM attendances WHERE "memberId" = m.id)::int AS "attendanceCount"
+         FROM members m
+         JOIN users u ON u.id = m."userId"
+         WHERE ${where}
+         ORDER BY m."createdAt" DESC
+         LIMIT $${i} OFFSET $${i + 1}`,
+        [...params, take, skip]
+      ),
+      pool.query(
+        `SELECT COUNT(*) FROM members m JOIN users u ON u.id = m."userId" WHERE ${where}`,
+        params
+      ),
     ]);
 
-    return paginatedResponse(members, total, page, limit);
+    const members = dataResult.rows.map(({ email, role, paymentCount, attendanceCount, ...m }) => ({
+      ...m,
+      user: { email, role },
+      _count: { payments: paymentCount, attendances: attendanceCount },
+    }));
+
+    return paginatedResponse(members, parseInt(countResult.rows[0].count, 10), page, limit);
   }
 
   async getById(id: string) {
-    const member = await prisma.member.findUnique({
-      where: { id },
-      include: {
-        user: { select: { email: true, role: true, lastLoginAt: true, isEmailVerified: true } },
-        payments: { orderBy: { createdAt: 'desc' }, take: 10 },
-        attendances: {
-          orderBy: { checkedInAt: 'desc' },
-          take: 10,
-          include: { event: { select: { title: true, startTime: true } } },
-        },
-        committeeRoles: {
-          include: { panel: { select: { year: true } } },
-        },
-      },
-    });
-    if (!member) throw new NotFoundError('Member not found');
-    return member;
+    const [memberResult, paymentsResult, attendancesResult, rolesResult] = await Promise.all([
+      pool.query(
+        `SELECT m.*, u.email, u.role, u."lastLoginAt", u."isEmailVerified"
+         FROM members m
+         JOIN users u ON u.id = m."userId"
+         WHERE m.id = $1`,
+        [id]
+      ),
+      pool.query(
+        `SELECT * FROM payments WHERE "memberId" = $1 ORDER BY "createdAt" DESC LIMIT 10`,
+        [id]
+      ),
+      pool.query(
+        `SELECT a.*, e.title AS "eventTitle", e."startTime" AS "eventStartTime", e.category AS "eventCategory"
+         FROM attendances a
+         JOIN events e ON e.id = a."eventId"
+         WHERE a."memberId" = $1
+         ORDER BY a."checkedInAt" DESC
+         LIMIT 10`,
+        [id]
+      ),
+      pool.query(
+        `SELECT cr.*, cp.year AS "panelYear"
+         FROM committee_roles cr
+         JOIN committee_panels cp ON cp.id = cr."panelId"
+         WHERE cr."memberId" = $1`,
+        [id]
+      ),
+    ]);
+
+    if (!memberResult.rows[0]) throw new NotFoundError('Member not found');
+
+    const { email, role, lastLoginAt, isEmailVerified, ...member } = memberResult.rows[0];
+
+    return {
+      ...member,
+      user: { email, role, lastLoginAt, isEmailVerified },
+      payments: paymentsResult.rows,
+      attendances: attendancesResult.rows.map(
+        ({ eventTitle, eventStartTime, eventCategory, ...a }) => ({
+          ...a,
+          event: { title: eventTitle, startTime: eventStartTime, category: eventCategory },
+        })
+      ),
+      committeeRoles: rolesResult.rows.map(({ panelYear, ...r }) => ({
+        ...r,
+        panel: { year: panelYear },
+      })),
+    };
   }
 
-  async updateStatus(id: string, status: MemberStatus, adminId: string) {
-    const member = await prisma.member.findUnique({ where: { id } });
-    if (!member) throw new NotFoundError('Member not found');
+  async updateStatus(id: string, status: MemberStatus, _adminId?: string) {
+    const existing = await pool.query('SELECT id FROM members WHERE id = $1', [id]);
+    if (!existing.rows[0]) throw new NotFoundError('Member not found');
 
-    return prisma.member.update({ where: { id }, data: { status } });
+    const result = await pool.query(
+      `UPDATE members SET status = $1, "updatedAt" = NOW() WHERE id = $2 RETURNING *`,
+      [status, id]
+    );
+    return result.rows[0];
   }
 
-  async update(id: string, data: Partial<{
-    fullName: string;
-    phone: string;
-    address: string;
-    occupation: string;
-    dateOfBirth: string;
-    emergencyContact: any;
-    familyDetails: any;
-    notes: string;
-    profilePhoto: string;
-  }>) {
-    const member = await prisma.member.findUnique({ where: { id } });
-    if (!member) throw new NotFoundError('Member not found');
+  async update(
+    id: string,
+    data: Partial<{
+      fullName: string;
+      phone: string;
+      address: string;
+      occupation: string;
+      dateOfBirth: string;
+      emergencyContact: any;
+      familyDetails: any;
+      notes: string;
+      profilePhoto: string;
+    }>
+  ) {
+    const existing = await pool.query('SELECT id FROM members WHERE id = $1', [id]);
+    if (!existing.rows[0]) throw new NotFoundError('Member not found');
 
-    return prisma.member.update({
-      where: { id },
-      data: {
-        ...data,
-        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
-      },
-    });
+    const fields: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+
+    const mappings: Record<string, string> = {
+      fullName: '"fullName"',
+      phone: 'phone',
+      address: 'address',
+      occupation: 'occupation',
+      notes: 'notes',
+      profilePhoto: '"profilePhoto"',
+      emergencyContact: '"emergencyContact"',
+      familyDetails: '"familyDetails"',
+    };
+
+    for (const [key, col] of Object.entries(mappings)) {
+      if (data[key as keyof typeof data] !== undefined) {
+        const val = data[key as keyof typeof data];
+        fields.push(`${col} = $${i}`);
+        params.push(typeof val === 'object' && val !== null ? JSON.stringify(val) : val);
+        i++;
+      }
+    }
+
+    if (data.dateOfBirth !== undefined) {
+      fields.push(`"dateOfBirth" = $${i}`);
+      params.push(data.dateOfBirth ? new Date(data.dateOfBirth) : null);
+      i++;
+    }
+
+    if (fields.length === 0) return existing.rows[0];
+
+    fields.push(`"updatedAt" = NOW()`);
+    params.push(id);
+
+    const result = await pool.query(
+      `UPDATE members SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`,
+      params
+    );
+    return result.rows[0];
   }
 
   async getQr(id: string) {
-    const member = await prisma.member.findUnique({ where: { id } });
+    const result = await pool.query(
+      'SELECT id, "membershipId", "qrCodeUrl" FROM members WHERE id = $1',
+      [id]
+    );
+    const member = result.rows[0];
     if (!member) throw new NotFoundError('Member not found');
 
     if (!member.qrCodeUrl) {
       const qrCodeUrl = await generateMemberQr(id, member.membershipId);
-      await prisma.member.update({ where: { id }, data: { qrCodeUrl } });
+      await pool.query('UPDATE members SET "qrCodeUrl" = $1, "updatedAt" = NOW() WHERE id = $2', [
+        qrCodeUrl,
+        id,
+      ]);
       return { qrCodeUrl };
     }
     return { qrCodeUrl: member.qrCodeUrl };
@@ -111,82 +211,101 @@ export class MemberService {
 
   async getPayments(memberId: string, query: { page?: number; limit?: number }) {
     const { skip, take, page, limit } = getPagination(query);
-    const [payments, total] = await Promise.all([
-      prisma.payment.findMany({
-        where: { memberId },
-        skip,
-        take,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.payment.count({ where: { memberId } }),
+    const [dataResult, countResult] = await Promise.all([
+      pool.query(
+        `SELECT * FROM payments WHERE "memberId" = $1 ORDER BY "createdAt" DESC LIMIT $2 OFFSET $3`,
+        [memberId, take, skip]
+      ),
+      pool.query(`SELECT COUNT(*) FROM payments WHERE "memberId" = $1`, [memberId]),
     ]);
-    return paginatedResponse(payments, total, page, limit);
+    return paginatedResponse(
+      dataResult.rows,
+      parseInt(countResult.rows[0].count, 10),
+      page,
+      limit
+    );
   }
 
   async getAttendance(memberId: string, query: { page?: number; limit?: number }) {
     const { skip, take, page, limit } = getPagination(query);
-    const [records, total] = await Promise.all([
-      prisma.attendance.findMany({
-        where: { memberId },
-        skip,
-        take,
-        orderBy: { checkedInAt: 'desc' },
-        include: { event: { select: { title: true, startTime: true, category: true } } },
-      }),
-      prisma.attendance.count({ where: { memberId } }),
+    const [dataResult, countResult] = await Promise.all([
+      pool.query(
+        `SELECT a.*, e.title AS "eventTitle", e."startTime" AS "eventStartTime", e.category AS "eventCategory"
+         FROM attendances a
+         JOIN events e ON e.id = a."eventId"
+         WHERE a."memberId" = $1
+         ORDER BY a."checkedInAt" DESC
+         LIMIT $2 OFFSET $3`,
+        [memberId, take, skip]
+      ),
+      pool.query(`SELECT COUNT(*) FROM attendances WHERE "memberId" = $1`, [memberId]),
     ]);
-    return paginatedResponse(records, total, page, limit);
+    const records = dataResult.rows.map(({ eventTitle, eventStartTime, eventCategory, ...a }) => ({
+      ...a,
+      event: { title: eventTitle, startTime: eventStartTime, category: eventCategory },
+    }));
+    return paginatedResponse(records, parseInt(countResult.rows[0].count, 10), page, limit);
   }
 
-  async exportMembers(format: 'pdf' | 'excel' | 'csv', filters: any) {
-    const members = await prisma.member.findMany({
-      where: filters.status ? { status: filters.status } : {},
-      include: { user: { select: { email: true, role: true } } },
-      orderBy: { membershipId: 'asc' },
-    });
+  async exportMembers(fmt: 'pdf' | 'excel' | 'csv', filters: any) {
+    const result = await pool.query(
+      `SELECT m.*, u.email, u.role
+       FROM members m
+       JOIN users u ON u.id = m."userId"
+       ${filters.status ? 'WHERE m.status = $1' : ''}
+       ORDER BY m."membershipId" ASC`,
+      filters.status ? [filters.status] : []
+    );
+    const members = result.rows;
 
-    if (format === 'excel') {
-      return generateExcel('Members Report', [
-        { key: 'membershipId', header: 'Member ID', width: 15 },
-        { key: 'fullName', header: 'Full Name', width: 25 },
-        { key: 'email', header: 'Email', width: 30 },
-        { key: 'phone', header: 'Phone', width: 15 },
-        { key: 'nic', header: 'NIC', width: 15 },
-        { key: 'status', header: 'Status', width: 12 },
-        { key: 'role', header: 'Role', width: 18 },
-        { key: 'dateJoined', header: 'Date Joined', width: 15 },
-      ], members.map((m) => ({
-        membershipId: m.membershipId,
-        fullName: m.fullName,
-        email: m.user.email,
-        phone: m.phone,
-        nic: m.nic,
-        status: m.status,
-        role: m.user.role,
-        dateJoined: format === 'excel' ? m.dateJoined.toLocaleDateString() : m.dateJoined.toISOString(),
-      })));
+    if (fmt === 'excel') {
+      return generateExcel(
+        'Members Report',
+        [
+          { key: 'membershipId', header: 'Member ID', width: 15 },
+          { key: 'fullName', header: 'Full Name', width: 25 },
+          { key: 'email', header: 'Email', width: 30 },
+          { key: 'phone', header: 'Phone', width: 15 },
+          { key: 'nic', header: 'NIC', width: 15 },
+          { key: 'status', header: 'Status', width: 12 },
+          { key: 'role', header: 'Role', width: 18 },
+          { key: 'dateJoined', header: 'Date Joined', width: 15 },
+        ],
+        members.map((m) => ({
+          membershipId: m.membershipId,
+          fullName: m.fullName,
+          email: m.email,
+          phone: m.phone,
+          nic: m.nic,
+          status: m.status,
+          role: m.role,
+          dateJoined: new Date(m.dateJoined).toLocaleDateString(),
+        }))
+      );
     }
 
-    if (format === 'pdf') {
+    if (fmt === 'pdf') {
       return generateReportPdf({
         title: 'Members Report',
         headers: ['Member ID', 'Name', 'Email', 'Phone', 'Status', 'Date Joined'],
         rows: members.map((m) => [
           m.membershipId,
           m.fullName,
-          m.user.email,
+          m.email,
           m.phone,
           m.status,
-          m.dateJoined.toLocaleDateString(),
+          new Date(m.dateJoined).toLocaleDateString(),
         ]),
       });
     }
 
-    // CSV
     const headers = 'Member ID,Full Name,Email,Phone,NIC,Status,Role,Date Joined\n';
-    const rows = members.map((m) =>
-      `${m.membershipId},"${m.fullName}",${m.user.email},${m.phone},${m.nic},${m.status},${m.user.role},${m.dateJoined.toLocaleDateString()}`
-    ).join('\n');
+    const rows = members
+      .map(
+        (m) =>
+          `${m.membershipId},"${m.fullName}",${m.email},${m.phone},${m.nic},${m.status},${m.role},${new Date(m.dateJoined).toLocaleDateString()}`
+      )
+      .join('\n');
     return Buffer.from(headers + rows, 'utf-8');
   }
 }

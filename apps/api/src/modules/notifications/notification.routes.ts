@@ -2,7 +2,7 @@ import { Router } from 'express';
 import * as notificationController from './notification.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorizeMinRole } from '../../middleware/authorize';
-import { Role } from '@prisma/client';
+import { Role } from '../../types';
 
 const router = Router();
 

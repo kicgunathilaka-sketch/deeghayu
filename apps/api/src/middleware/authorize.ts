@@ -1,4 +1,4 @@
-import { Role } from '@prisma/client';
+import { Role } from '../types';
 import { Request, Response, NextFunction } from 'express';
 import { ForbiddenError, UnauthorizedError } from '../utils/errors';
 
@@ -16,7 +16,7 @@ const roleHierarchy: Record<Role, number> = {
 export function authorize(...roles: Role[]) {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user) throw new UnauthorizedError();
-    if (!roles.includes(req.user.role)) throw new ForbiddenError('Insufficient permissions');
+    if (!roles.includes(req.user.role as Role)) throw new ForbiddenError('Insufficient permissions');
     next();
   };
 }
@@ -24,7 +24,7 @@ export function authorize(...roles: Role[]) {
 export function authorizeMinRole(minRole: Role) {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user) throw new UnauthorizedError();
-    if (roleHierarchy[req.user.role] < roleHierarchy[minRole]) {
+    if (roleHierarchy[req.user.role as Role] < roleHierarchy[minRole]) {
       throw new ForbiddenError('Insufficient permissions');
     }
     next();

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import * as committeeController from './committee.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorizeMinRole } from '../../middleware/authorize';
-import { Role } from '@prisma/client';
+import { Role } from '../../types';
 
 const router = Router();
 

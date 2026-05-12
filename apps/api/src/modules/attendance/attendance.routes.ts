@@ -3,7 +3,7 @@ import * as attendanceController from './attendance.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorizeMinRole } from '../../middleware/authorize';
 import { scanLimiter } from '../../middleware/rateLimiter';
-import { Role } from '@prisma/client';
+import { Role } from '../../types';
 
 const router = Router();
 

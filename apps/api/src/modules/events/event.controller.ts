@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { EventService } from './event.service';
-import { RsvpResponse } from '@prisma/client';
+import { RsvpResponse } from '../../types';
 
 const eventService = new EventService();
 

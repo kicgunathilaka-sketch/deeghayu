@@ -1,29 +1,30 @@
-import { NotificationType } from '@prisma/client';
-import { prisma } from '../../config/database';
+import { v4 as uuidv4 } from 'uuid';
+import { pool } from '../../config/database';
+import { NotificationType } from '../../types';
 import { sendMail } from '../../utils/mailer';
 import { config } from '../../config';
 
 export class NotificationService {
   async getForUser(userId: string) {
-    return prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    const result = await pool.query(
+      `SELECT * FROM notifications WHERE "userId" = $1 ORDER BY "createdAt" DESC LIMIT 50`,
+      [userId]
+    );
+    return result.rows;
   }
 
   async markRead(id: string, userId: string) {
-    return prisma.notification.updateMany({
-      where: { id, userId },
-      data: { isRead: true },
-    });
+    await pool.query(
+      `UPDATE notifications SET "isRead" = true WHERE id = $1 AND "userId" = $2`,
+      [id, userId]
+    );
   }
 
   async markAllRead(userId: string) {
-    return prisma.notification.updateMany({
-      where: { userId, isRead: false },
-      data: { isRead: true },
-    });
+    await pool.query(
+      `UPDATE notifications SET "isRead" = true WHERE "userId" = $1 AND "isRead" = false`,
+      [userId]
+    );
   }
 
   async broadcast(data: {
@@ -33,29 +34,30 @@ export class NotificationService {
     link?: string;
     roles?: string[];
   }) {
-    const where: any = {};
-    if (data.roles?.length) where.role = { in: data.roles };
+    let usersQuery = `SELECT u.id, u.email, m."fullName" FROM users u LEFT JOIN members m ON m."userId" = u.id`;
+    const params: any[] = [];
 
-    const users = await prisma.user.findMany({
-      where,
-      select: { id: true, email: true, member: { select: { fullName: true } } },
-    });
-
-    // Create in-app notifications
-    if (data.type === NotificationType.IN_APP || data.type === NotificationType.BOTH) {
-      await prisma.notification.createMany({
-        data: users.map((u) => ({
-          userId: u.id,
-          title: data.title,
-          body: data.body,
-          type: data.type,
-          link: data.link,
-        })),
-      });
+    if (data.roles?.length) {
+      usersQuery += ` WHERE u.role = ANY($1)`;
+      params.push(data.roles);
     }
 
-    // Send emails
-    if (data.type === NotificationType.EMAIL || data.type === NotificationType.BOTH) {
+    const usersResult = await pool.query(usersQuery, params);
+    const users = usersResult.rows;
+
+    if (data.type === 'IN_APP' || data.type === 'BOTH') {
+      await Promise.all(
+        users.map((u) =>
+          pool.query(
+            `INSERT INTO notifications (id, "userId", title, body, type, link, "isRead", "createdAt")
+             VALUES ($1, $2, $3, $4, $5, $6, false, NOW())`,
+            [uuidv4(), u.id, data.title, data.body, data.type, data.link || null]
+          )
+        )
+      );
+    }
+
+    if (data.type === 'EMAIL' || data.type === 'BOTH') {
       await Promise.allSettled(
         users.map((u) =>
           sendMail({
@@ -75,8 +77,11 @@ export class NotificationService {
   }
 
   async create(userId: string, title: string, body: string, link?: string) {
-    return prisma.notification.create({
-      data: { userId, title, body, link },
-    });
+    const result = await pool.query(
+      `INSERT INTO notifications (id, "userId", title, body, type, link, "isRead", "createdAt")
+       VALUES ($1, $2, $3, $4, 'IN_APP', $5, false, NOW()) RETURNING *`,
+      [uuidv4(), userId, title, body, link || null]
+    );
+    return result.rows[0];
   }
 }

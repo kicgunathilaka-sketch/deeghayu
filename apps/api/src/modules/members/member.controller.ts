@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { MemberService } from './member.service';
-import { MemberStatus } from '@prisma/client';
+import { MemberStatus } from '../../types';
 
 const memberService = new MemberService();
 

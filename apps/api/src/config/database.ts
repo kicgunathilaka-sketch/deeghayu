@@ -1,24 +1,18 @@
-import { PrismaClient } from '@prisma/client';
+import { Pool } from 'pg';
 import { logger } from './logger';
 
-const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
-
-export const prisma =
-  globalForPrisma.prisma ||
-  new PrismaClient({
-    log: ['error', 'warn'],
-  });
-
-if (process.env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma;
-}
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
 
 export async function connectDatabase() {
-  await prisma.$connect();
+  const client = await pool.connect();
+  client.release();
   logger.info('Database connected');
 }
 
 export async function disconnectDatabase() {
-  await prisma.$disconnect();
+  await pool.end();
   logger.info('Database disconnected');
 }

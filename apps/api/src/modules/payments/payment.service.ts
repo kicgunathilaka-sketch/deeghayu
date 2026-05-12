@@ -1,5 +1,6 @@
-import { PaymentStatus, PaymentType } from '@prisma/client';
-import { prisma } from '../../config/database';
+import { v4 as uuidv4 } from 'uuid';
+import { pool } from '../../config/database';
+import { PaymentStatus, PaymentType } from '../../types';
 import { NotFoundError } from '../../utils/errors';
 import { getPagination, paginatedResponse } from '../../utils/pagination';
 import { generateReceiptPdf } from '../../utils/pdfGenerator';
@@ -18,46 +19,80 @@ export class PaymentService {
     year?: number;
   }) {
     const { skip, take, page, limit } = getPagination(query);
-    const where: any = {};
 
-    if (query.status) where.status = query.status;
-    if (query.type) where.type = query.type;
-    if (query.month) where.month = Number(query.month);
-    if (query.year) where.year = Number(query.year);
+    const conditions: string[] = ['1=1'];
+    const params: any[] = [];
+    let i = 1;
+
+    if (query.status) {
+      conditions.push(`p.status = $${i}`);
+      params.push(query.status);
+      i++;
+    }
+    if (query.type) {
+      conditions.push(`p.type = $${i}`);
+      params.push(query.type);
+      i++;
+    }
+    if (query.month) {
+      conditions.push(`p.month = $${i}`);
+      params.push(Number(query.month));
+      i++;
+    }
+    if (query.year) {
+      conditions.push(`p.year = $${i}`);
+      params.push(Number(query.year));
+      i++;
+    }
     if (query.search) {
-      where.member = {
-        OR: [
-          { fullName: { contains: query.search, mode: 'insensitive' } },
-          { membershipId: { contains: query.search, mode: 'insensitive' } },
-        ],
-      };
+      conditions.push(
+        `(m."fullName" ILIKE $${i} OR m."membershipId" ILIKE $${i})`
+      );
+      params.push(`%${query.search}%`);
+      i++;
     }
 
-    const [payments, total] = await Promise.all([
-      prisma.payment.findMany({
-        where,
-        skip,
-        take,
-        orderBy: { createdAt: 'desc' },
-        include: {
-          member: { select: { fullName: true, membershipId: true, user: { select: { email: true } } } },
-        },
-      }),
-      prisma.payment.count({ where }),
+    const where = conditions.join(' AND ');
+
+    const [dataResult, countResult] = await Promise.all([
+      pool.query(
+        `SELECT p.*, m."fullName", m."membershipId", u.email
+         FROM payments p
+         JOIN members m ON m.id = p."memberId"
+         JOIN users u ON u.id = m."userId"
+         WHERE ${where}
+         ORDER BY p."createdAt" DESC
+         LIMIT $${i} OFFSET $${i + 1}`,
+        [...params, take, skip]
+      ),
+      pool.query(
+        `SELECT COUNT(*) FROM payments p
+         JOIN members m ON m.id = p."memberId"
+         JOIN users u ON u.id = m."userId"
+         WHERE ${where}`,
+        params
+      ),
     ]);
 
-    return paginatedResponse(payments, total, page, limit);
+    const payments = dataResult.rows.map(({ fullName, membershipId, email, ...p }) => ({
+      ...p,
+      member: { fullName, membershipId, user: { email } },
+    }));
+
+    return paginatedResponse(payments, parseInt(countResult.rows[0].count, 10), page, limit);
   }
 
   async getById(id: string) {
-    const payment = await prisma.payment.findUnique({
-      where: { id },
-      include: {
-        member: { select: { fullName: true, membershipId: true, address: true } },
-      },
-    });
-    if (!payment) throw new NotFoundError('Payment not found');
-    return payment;
+    const result = await pool.query(
+      `SELECT p.*, m."fullName", m."membershipId", m.address
+       FROM payments p
+       JOIN members m ON m.id = p."memberId"
+       WHERE p.id = $1`,
+      [id]
+    );
+    if (!result.rows[0]) throw new NotFoundError('Payment not found');
+    const { fullName, membershipId, address, ...p } = result.rows[0];
+    return { ...p, member: { fullName, membershipId, address } };
   }
 
   async create(data: {
@@ -71,60 +106,73 @@ export class PaymentService {
     description?: string;
     recordedBy: string;
   }) {
-    const member = await prisma.member.findUnique({ where: { id: data.memberId } });
-    if (!member) throw new NotFoundError('Member not found');
+    const memberCheck = await pool.query('SELECT id FROM members WHERE id = $1', [data.memberId]);
+    if (!memberCheck.rows[0]) throw new NotFoundError('Member not found');
 
     const paidAmount = data.paidAmount ?? data.amount;
-    let status: PaymentStatus = PaymentStatus.PAID;
-    if (paidAmount === 0) status = PaymentStatus.PENDING;
-    else if (paidAmount < data.amount) status = PaymentStatus.PARTIAL;
+    let status: PaymentStatus = 'PAID';
+    if (paidAmount === 0) status = 'PENDING';
+    else if (paidAmount < data.amount) status = 'PARTIAL';
 
-    return prisma.payment.create({
-      data: {
-        memberId: data.memberId,
-        type: data.type,
-        amount: data.amount,
-        paidAmount: paidAmount,
+    const result = await pool.query(
+      `INSERT INTO payments (id, "memberId", type, status, amount, "paidAmount", "dueDate", "paidAt",
+                            month, year, description, "recordedBy", "createdAt", "updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW()) RETURNING *`,
+      [
+        uuidv4(),
+        data.memberId,
+        data.type,
         status,
-        dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
-        paidAt: paidAmount > 0 ? new Date() : undefined,
-        month: data.month,
-        year: data.year,
-        description: data.description,
-        recordedBy: data.recordedBy,
-      },
-    });
+        data.amount,
+        paidAmount,
+        data.dueDate ? new Date(data.dueDate) : null,
+        paidAmount > 0 ? new Date() : null,
+        data.month || null,
+        data.year || null,
+        data.description || null,
+        data.recordedBy,
+      ]
+    );
+    return result.rows[0];
   }
 
-  async update(id: string, data: Partial<{
-    status: PaymentStatus;
-    paidAmount: number;
-    description: string;
-  }>) {
-    const payment = await prisma.payment.findUnique({ where: { id } });
-    if (!payment) throw new NotFoundError('Payment not found');
+  async update(
+    id: string,
+    data: Partial<{
+      status: PaymentStatus;
+      paidAmount: number;
+      description: string;
+    }>
+  ) {
+    const existing = await pool.query('SELECT * FROM payments WHERE id = $1', [id]);
+    if (!existing.rows[0]) throw new NotFoundError('Payment not found');
+    const payment = existing.rows[0];
 
     const updatedPaidAmount = data.paidAmount ?? Number(payment.paidAmount);
     const amount = Number(payment.amount);
     let status = data.status;
     if (!status) {
-      if (updatedPaidAmount >= amount) status = PaymentStatus.PAID;
-      else if (updatedPaidAmount > 0) status = PaymentStatus.PARTIAL;
+      if (updatedPaidAmount >= amount) status = 'PAID';
+      else if (updatedPaidAmount > 0) status = 'PARTIAL';
+      else status = 'PENDING';
     }
 
-    return prisma.payment.update({
-      where: { id },
-      data: {
-        ...data,
-        status,
-        paidAt: status === PaymentStatus.PAID ? new Date() : payment.paidAt,
-      },
-    });
+    const result = await pool.query(
+      `UPDATE payments SET
+        status = $1,
+        "paidAmount" = $2,
+        description = COALESCE($3, description),
+        "paidAt" = CASE WHEN $1 = 'PAID' THEN COALESCE("paidAt", NOW()) ELSE "paidAt" END,
+        "updatedAt" = NOW()
+       WHERE id = $4 RETURNING *`,
+      [status, updatedPaidAmount, data.description || null, id]
+    );
+    return result.rows[0];
   }
 
   async getReceipt(id: string): Promise<Buffer> {
     const payment = await this.getById(id);
-    if (payment.status !== PaymentStatus.PAID && payment.status !== PaymentStatus.PARTIAL) {
+    if (payment.status !== 'PAID' && payment.status !== 'PARTIAL') {
       throw new NotFoundError('No receipt for unpaid payment');
     }
 
@@ -134,70 +182,95 @@ export class PaymentService {
       amount: Number(payment.paidAmount),
       type: payment.type,
       description: payment.description || undefined,
-      paidAt: payment.paidAt || new Date(),
+      paidAt: payment.paidAt ? new Date(payment.paidAt) : new Date(),
       receiptNumber: `RCP-${payment.id.slice(-8).toUpperCase()}`,
     });
   }
 
   async getSummary(year: number, month?: number) {
-    const where: any = { year };
-    if (month) where.month = month;
+    const conditions = ['year = $1'];
+    const params: any[] = [year];
+    let i = 2;
 
-    const [totalIncome, totalPending, totalOverdue, byType] = await Promise.all([
-      prisma.payment.aggregate({
-        where: { ...where, status: { in: [PaymentStatus.PAID, PaymentStatus.PARTIAL] } },
-        _sum: { paidAmount: true },
-      }),
-      prisma.payment.count({ where: { ...where, status: PaymentStatus.PENDING } }),
-      prisma.payment.count({ where: { ...where, status: PaymentStatus.OVERDUE } }),
-      prisma.payment.groupBy({
-        by: ['type'],
-        where,
-        _sum: { paidAmount: true },
-        _count: true,
-      }),
+    if (month) {
+      conditions.push(`month = $${i}`);
+      params.push(month);
+      i++;
+    }
+
+    const where = conditions.join(' AND ');
+    const paidWhere = `${where} AND status IN ('PAID', 'PARTIAL')`;
+
+    const [incomeResult, pendingResult, overdueResult, byTypeResult] = await Promise.all([
+      pool.query(
+        `SELECT COALESCE(SUM("paidAmount"), 0) AS total FROM payments WHERE ${paidWhere}`,
+        params
+      ),
+      pool.query(
+        `SELECT COUNT(*) FROM payments WHERE ${where} AND status = 'PENDING'`,
+        params
+      ),
+      pool.query(
+        `SELECT COUNT(*) FROM payments WHERE ${where} AND status = 'OVERDUE'`,
+        params
+      ),
+      pool.query(
+        `SELECT type, COUNT(*)::int AS "_count", COALESCE(SUM("paidAmount"), 0) AS "paidAmount"
+         FROM payments WHERE ${where} GROUP BY type`,
+        params
+      ),
     ]);
 
     return {
-      totalIncome: totalIncome._sum.paidAmount || 0,
-      pendingCount: totalPending,
-      overdueCount: totalOverdue,
-      byType,
+      totalIncome: Number(incomeResult.rows[0].total),
+      pendingCount: parseInt(pendingResult.rows[0].count, 10),
+      overdueCount: parseInt(overdueResult.rows[0].count, 10),
+      byType: byTypeResult.rows.map((r) => ({
+        type: r.type,
+        _count: r._count,
+        _sum: { paidAmount: Number(r.paidAmount) },
+      })),
     };
   }
 
   async getOverdue() {
-    return prisma.payment.findMany({
-      where: {
-        OR: [
-          { status: PaymentStatus.OVERDUE },
-          { status: PaymentStatus.PENDING, dueDate: { lt: new Date() } },
-        ],
-      },
-      include: {
-        member: { select: { fullName: true, membershipId: true, user: { select: { email: true } } } },
-      },
-      orderBy: { dueDate: 'asc' },
-    });
+    const result = await pool.query(
+      `SELECT p.*, m."fullName", m."membershipId", u.email
+       FROM payments p
+       JOIN members m ON m.id = p."memberId"
+       JOIN users u ON u.id = m."userId"
+       WHERE p.status = 'OVERDUE' OR (p.status = 'PENDING' AND p."dueDate" < NOW())
+       ORDER BY p."dueDate" ASC`
+    );
+
+    return result.rows.map(({ fullName, membershipId, email, ...p }) => ({
+      ...p,
+      member: { fullName, membershipId, user: { email } },
+    }));
   }
 
   async sendBulkReminders(paymentIds: string[]) {
-    const payments = await prisma.payment.findMany({
-      where: { id: { in: paymentIds } },
-      include: {
-        member: { select: { fullName: true, user: { select: { email: true } } } },
-      },
-    });
+    if (paymentIds.length === 0) return { sent: 0, failed: 0 };
+
+    const placeholders = paymentIds.map((_, i) => `$${i + 1}`).join(',');
+    const result = await pool.query(
+      `SELECT p.*, m."fullName", u.email
+       FROM payments p
+       JOIN members m ON m.id = p."memberId"
+       JOIN users u ON u.id = m."userId"
+       WHERE p.id IN (${placeholders})`,
+      paymentIds
+    );
 
     const results = await Promise.allSettled(
-      payments.map((p) =>
+      result.rows.map((p) =>
         sendMail({
-          to: p.member.user.email,
+          to: p.email,
           subject: 'Payment Reminder — Deeghayu Community',
           html: paymentReminderTemplate(
-            p.member.fullName,
+            p.fullName,
             Number(p.amount).toFixed(2),
-            p.dueDate ? format(p.dueDate, 'PPP') : 'N/A'
+            p.dueDate ? format(new Date(p.dueDate), 'PPP') : 'N/A'
           ),
         })
       )
@@ -208,16 +281,22 @@ export class PaymentService {
   }
 
   async getAnalytics(year: number) {
-    const months = Array.from({ length: 12 }, (_, i) => i + 1);
-    const data = await Promise.all(
-      months.map(async (month) => {
-        const agg = await prisma.payment.aggregate({
-          where: { year, month, status: { in: [PaymentStatus.PAID, PaymentStatus.PARTIAL] } },
-          _sum: { paidAmount: true },
-        });
-        return { month, income: Number(agg._sum.paidAmount || 0) };
-      })
+    const result = await pool.query(
+      `SELECT month, COALESCE(SUM("paidAmount"), 0) AS income
+       FROM payments
+       WHERE year = $1 AND status IN ('PAID', 'PARTIAL')
+       GROUP BY month`,
+      [year]
     );
-    return data;
+
+    const byMonth: Record<number, number> = {};
+    result.rows.forEach((r) => {
+      byMonth[r.month] = Number(r.income);
+    });
+
+    return Array.from({ length: 12 }, (_, i) => ({
+      month: i + 1,
+      income: byMonth[i + 1] ?? 0,
+    }));
   }
 }
