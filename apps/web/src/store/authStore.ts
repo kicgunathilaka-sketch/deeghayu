@@ -21,7 +21,7 @@ interface AuthState {
   isAuthenticated: boolean;
   setAuth: (user: AuthUser, accessToken: string, refreshToken: string) => void;
   setAccessToken: (token: string) => void;
-  updateUser: (patch: Partial<AuthUser & { member: Partial<AuthUser['member']> }>) => void;
+  updateUser: (patch: { member?: Partial<NonNullable<AuthUser['member']>> }) => void;
   logout: () => void;
 }
 
