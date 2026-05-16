@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, CreditCard, Calendar, QrCode,
   Users2, BarChart3, Bell, Settings, LogOut, ChevronLeft,
-  Shield, Wallet, ClipboardList, Images
+  Shield, Wallet, ClipboardList, Images, FileText
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useUiStore } from '../../store/uiStore';
@@ -26,6 +26,7 @@ const allNavItems = [
   { to: '/attendance', icon: QrCode, label: 'Attendance', roles: ADMIN_ROLES },
   { to: '/committee', icon: Users2, label: 'Committee', roles: ['SUPER_ADMIN', 'ADMIN', 'PRESIDENT'] },
   { to: '/reports', icon: BarChart3, label: 'Reports', roles: ADMIN_ROLES },
+  { to: '/documents', icon: FileText, label: 'Documents', roles: ['SUPER_ADMIN', 'ADMIN', 'PRESIDENT', 'SECRETARY'] },
   { to: '/settings', icon: Settings, label: 'Settings', roles: '*' },
 ];
 

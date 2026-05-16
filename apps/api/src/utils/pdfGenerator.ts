@@ -59,6 +59,141 @@ export function generateReceiptPdf(data: ReceiptData): Promise<Buffer> {
   });
 }
 
+interface LetterData {
+  receiverName: string;
+  receiverDesignation?: string;
+  receiverAddress: string;
+  subject?: string;
+  content: string;
+  senderName?: string;
+  senderDesignation?: string;
+}
+
+export function generateLetterPdf(data: LetterData): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 0 });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c) => chunks.push(c));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const W = doc.page.width;
+    const ML = 65; // left margin
+    const MR = 65; // right margin
+    const CW = W - ML - MR; // content width
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' });
+    const ref = `DCW/${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+
+    // ── Header band ─────────────────────────────────────────
+    doc.rect(0, 0, W, 110).fill('#0c3a5e');
+    // Accent stripe
+    doc.rect(0, 110, W, 5).fill('#1d8cf8');
+    doc.rect(0, 115, W, 2).fill('#e8f4ff');
+
+    // Logo placeholder circle
+    doc.circle(ML + 32, 55, 30).fillAndStroke('#1d5080', '#4a90c4').lineWidth(1.5);
+    doc.fillColor('#93c5ea').fontSize(7.5).font('Helvetica-Bold')
+       .text('LOGO', ML + 16, 50, { width: 32, align: 'center' });
+
+    // Org name
+    doc.fillColor('#ffffff').fontSize(17).font('Helvetica-Bold')
+       .text('Deeghayu Community Welfare Society', ML + 76, 30, { width: CW - 76 });
+    doc.fillColor('#93c5ea').fontSize(10).font('Helvetica')
+       .text('Kotigala, Handapangoda.', ML + 76, 54, { width: CW - 76 });
+    // Tagline
+    doc.fillColor('#6daed6').fontSize(8).font('Helvetica-Oblique')
+       .text('Building Community. Enriching Lives.', ML + 76, 70, { width: CW - 76 });
+
+    // ── Ref + Date row ──────────────────────────────────────
+    let y = 132;
+    doc.fillColor('#475569').fontSize(9.5).font('Helvetica')
+       .text(`Ref: ${ref}`, ML, y);
+    doc.fillColor('#475569').fontSize(9.5)
+       .text(dateStr, ML, y, { align: 'right', width: CW });
+    y += 22;
+
+    // Thin divider
+    doc.moveTo(ML, y).lineTo(W - MR, y).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
+    y += 18;
+
+    // ── Receiver block ──────────────────────────────────────
+    doc.fillColor('#0f172a').fontSize(11).font('Helvetica')
+       .text('To,', ML, y);
+    y += 16;
+    doc.fillColor('#0f172a').fontSize(11).font('Helvetica-Bold')
+       .text(data.receiverName, ML, y);
+    y += 16;
+    if (data.receiverDesignation) {
+      doc.fillColor('#334155').fontSize(10.5).font('Helvetica')
+         .text(data.receiverDesignation, ML, y);
+      y += 15;
+    }
+    const addrLines = data.receiverAddress.split('\n');
+    addrLines.forEach((line) => {
+      doc.fillColor('#334155').fontSize(10.5).font('Helvetica')
+         .text(line.trim(), ML, y);
+      y += 15;
+    });
+    y += 12;
+
+    // ── Subject ─────────────────────────────────────────────
+    if (data.subject) {
+      doc.fillColor('#0f172a').fontSize(11).font('Helvetica-Bold')
+         .text(`Subject: ${data.subject}`, ML, y, { underline: true, width: CW });
+      y += 22;
+    }
+
+    // ── Salutation ──────────────────────────────────────────
+    doc.fillColor('#0f172a').fontSize(11).font('Helvetica')
+       .text(`Dear ${data.receiverName},`, ML, y);
+    y += 22;
+
+    // ── Body ────────────────────────────────────────────────
+    const contentLines = data.content.split('\n\n');
+    contentLines.forEach((para, i) => {
+      const h = doc.heightOfString(para.trim(), { width: CW, lineGap: 3 });
+      if (y + h > doc.page.height - 120) {
+        doc.addPage({ margin: 0 });
+        y = 60;
+      }
+      doc.fillColor('#1e293b').fontSize(11).font('Helvetica')
+         .text(para.trim(), ML, y, { width: CW, lineGap: 3, align: 'justify' });
+      y += h + (i < contentLines.length - 1 ? 10 : 0);
+    });
+    y += 24;
+
+    // ── Closing ─────────────────────────────────────────────
+    if (y > doc.page.height - 130) {
+      doc.addPage({ margin: 0 });
+      y = 60;
+    }
+    doc.fillColor('#0f172a').fontSize(11).font('Helvetica')
+       .text('Yours faithfully,', ML, y);
+    y += 56;
+
+    // Signature line
+    doc.moveTo(ML, y).lineTo(ML + 170, y).strokeColor('#475569').lineWidth(0.8).stroke();
+    y += 6;
+    doc.fillColor('#0f172a').fontSize(11).font('Helvetica-Bold')
+       .text(data.senderName || 'Secretary', ML, y);
+    y += 15;
+    doc.fillColor('#475569').fontSize(10).font('Helvetica')
+       .text(data.senderDesignation || 'Secretary', ML, y);
+    y += 14;
+    doc.fillColor('#475569').fontSize(10)
+       .text('Deeghayu Community Welfare Society', ML, y);
+
+    // ── Footer ──────────────────────────────────────────────
+    const FY = doc.page.height - 36;
+    doc.moveTo(ML, FY - 10).lineTo(W - MR, FY - 10).strokeColor('#cbd5e1').lineWidth(0.4).stroke();
+    doc.fillColor('#94a3b8').fontSize(8).font('Helvetica')
+       .text('Deeghayu Community Welfare Society  ·  Kotigala, Handapangoda.', ML, FY, { align: 'center', width: CW });
+
+    doc.end();
+  });
+}
+
 interface ReportData {
   title: string;
   headers: string[];
