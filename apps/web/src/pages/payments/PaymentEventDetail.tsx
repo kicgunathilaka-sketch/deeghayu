@@ -30,6 +30,8 @@ export function PaymentEventDetail({ eventId, onClose }: Props) {
       qc.invalidateQueries({ queryKey: ['active-payment-events'] });
       qc.invalidateQueries({ queryKey: ['payment-summary'] });
       qc.invalidateQueries({ queryKey: ['bank-accounts'] });
+      qc.invalidateQueries({ queryKey: ['member'] });
+      qc.invalidateQueries({ queryKey: ['member-arrears'] });
       toast.success('Payment recorded');
     },
     onError: (err: any) => {

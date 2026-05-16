@@ -38,12 +38,14 @@ export default function MemberProfilePage() {
     queryKey: ['member', memberId],
     queryFn: () => membersApi.getById(memberId!).then((r) => r.data.data),
     enabled: !!memberId,
+    staleTime: 0,
   });
 
   const { data: arrearsData } = useQuery({
     queryKey: ['member-arrears', memberId],
     queryFn: () => membersApi.getArrears(memberId!).then((r) => r.data.data),
     enabled: !!memberId,
+    staleTime: 0,
   });
 
   const { register, handleSubmit, reset } = useForm();

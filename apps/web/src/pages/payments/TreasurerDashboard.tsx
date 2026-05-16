@@ -76,6 +76,8 @@ export default function TreasurerDashboardPage() {
       qc.invalidateQueries({ queryKey: ['payment-summary'] });
       qc.invalidateQueries({ queryKey: ['overdue-payments'] });
       qc.invalidateQueries({ queryKey: ['bank-accounts'] });
+      qc.invalidateQueries({ queryKey: ['member'] });
+      qc.invalidateQueries({ queryKey: ['member-arrears'] });
       setShowAddModal(false);
       resetPaymentForm();
       toast.success('Payment recorded');
