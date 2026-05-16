@@ -40,6 +40,7 @@ CREATE TABLE members (
   occupation       TEXT,
   status           "MemberStatus" NOT NULL DEFAULT 'PENDING',
   "qrCodeUrl"      TEXT,
+  "signatureUrl"   TEXT,
   "emergencyContact" JSONB,
   "familyDetails"  JSONB,
   notes            TEXT,

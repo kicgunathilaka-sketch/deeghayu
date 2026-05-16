@@ -143,6 +143,7 @@ export class MemberService {
       familyDetails: any;
       notes: string;
       profilePhoto: string;
+      signatureUrl: string;
     }>
   ) {
     const existing = await pool.query('SELECT id FROM members WHERE id = $1', [id]);
@@ -159,6 +160,7 @@ export class MemberService {
       occupation: 'occupation',
       notes: 'notes',
       profilePhoto: '"profilePhoto"',
+      signatureUrl: '"signatureUrl"',
       emergencyContact: '"emergencyContact"',
       familyDetails: '"familyDetails"',
     };

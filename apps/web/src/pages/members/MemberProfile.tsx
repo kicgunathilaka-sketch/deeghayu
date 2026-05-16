@@ -1,12 +1,13 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, MapPin, CreditCard, Calendar, Shield, AlertTriangle, Pencil, Camera, X, Check, Sun, Moon, Bell } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, CreditCard, Calendar, Shield, AlertTriangle, Pencil, Camera, X, Check, Sun, Moon, Bell, PenLine } from 'lucide-react';
 import { membersApi } from '../../api/members.api';
 import { useAuthStore } from '../../store/authStore';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { SignaturePad } from '../../components/ui/SignaturePad';
 import { StatusBadge } from '../../components/ui/Badge';
 import { PageLoader } from '../../components/ui/Spinner';
 import { formatDate, formatCurrency, formatRole } from '../../utils/formatters';
@@ -31,6 +32,7 @@ export default function MemberProfilePage() {
 
   const [editMode, setEditMode] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showSigPad, setShowSigPad] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['member', memberId],
@@ -84,6 +86,13 @@ export default function MemberProfilePage() {
       setUploadingPhoto(false);
       e.target.value = '';
     }
+  };
+
+  const handleSaveSig = async (url: string) => {
+    await membersApi.update(memberId!, { signatureUrl: url });
+    qc.invalidateQueries({ queryKey: ['member', memberId] });
+    setShowSigPad(false);
+    toast.success('Signature saved');
   };
 
   const startEdit = () => {
@@ -306,6 +315,31 @@ export default function MemberProfilePage() {
               )) || <p className="text-sm text-slate-400">No attendance records</p>}
             </div>
           </div>
+
+          {/* Digital Signature */}
+          {canEdit && (
+            <div className="card p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  <PenLine size={16} /> Digital Signature
+                </h3>
+                {!showSigPad && (
+                  <Button variant="secondary" size="sm" icon={<Pencil size={14} />} onClick={() => setShowSigPad(true)}>
+                    {member.signatureUrl ? 'Update' : 'Add Signature'}
+                  </Button>
+                )}
+              </div>
+              {showSigPad ? (
+                <SignaturePad onSave={handleSaveSig} onCancel={() => setShowSigPad(false)} />
+              ) : member.signatureUrl ? (
+                <div className="border border-surface-200 dark:border-surface-600 rounded-xl p-3 bg-white dark:bg-surface-800">
+                  <img src={member.signatureUrl} alt="Digital signature" className="max-h-24 object-contain" />
+                </div>
+              ) : (
+                <p className="text-sm text-slate-400">No signature added yet.</p>
+              )}
+            </div>
+          )}
 
           {/* Appearance — only on own profile */}
           {isOwnProfile && (

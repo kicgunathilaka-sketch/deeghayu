@@ -39,7 +39,10 @@ export default function EventDetailPage() {
 
   const rsvpMutation = useMutation({
     mutationFn: (response: string) => eventsApi.rsvp(id!, response),
-    onSuccess: () => toast.success('RSVP submitted'),
+    onSuccess: () => {
+      toast.success('RSVP submitted');
+      navigate(-1);
+    },
     onError: () => toast.error('RSVP failed'),
   });
 
