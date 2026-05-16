@@ -263,7 +263,7 @@ export class MemberService {
       pool.query("SELECT value FROM system_settings WHERE key = 'monthly_fee'"),
       pool.query(
         `SELECT month, year, status, amount, "paidAmount" FROM payments
-         WHERE "memberId" = $1 AND type = 'MONTHLY_FEE'`,
+         WHERE "memberId" = $1 AND type = 'MONTHLY_MEETING'`,
         [memberId]
       ),
     ]);

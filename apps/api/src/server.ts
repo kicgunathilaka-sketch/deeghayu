@@ -2,9 +2,12 @@ import { config } from './config';
 import { connectDatabase, disconnectDatabase } from './config/database';
 import { logger } from './config/logger';
 import app from './app';
+import { startScheduler } from './scheduler';
 
 async function main() {
   await connectDatabase();
+
+  const schedulerInterval = startScheduler();
 
   const server = app.listen(config.port, () => {
     logger.info(`🚀 ${config.appName} API running on port ${config.port} [${config.nodeEnv}]`);
@@ -12,6 +15,7 @@ async function main() {
 
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down...`);
+    clearInterval(schedulerInterval);
     server.close(async () => {
       await disconnectDatabase();
       logger.info('Server closed');

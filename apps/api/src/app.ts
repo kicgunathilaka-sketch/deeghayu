@@ -41,9 +41,13 @@ app.use(
 );
 
 // CORS
+const allowedOrigins = config.nodeEnv === 'development'
+  ? /^http:\/\/localhost:\d+$/
+  : config.clientUrl;
+
 app.use(
   cors({
-    origin: config.clientUrl,
+    origin: allowedOrigins,
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -61,8 +65,11 @@ app.use(
   })
 );
 
-// Serve uploaded files
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+// Serve uploaded files — allow cross-origin loading (images in <img> tags from the web app)
+app.use('/uploads', (_req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(path.join(process.cwd(), 'uploads')));
 
 // Global rate limit
 app.use('/api', globalLimiter);

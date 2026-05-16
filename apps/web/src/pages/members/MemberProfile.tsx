@@ -1,9 +1,10 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, MapPin, QrCode, CreditCard, Calendar, Shield, AlertTriangle, Pencil, Camera, X, Check } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, CreditCard, Calendar, Shield, AlertTriangle, Pencil, Camera, X, Check, Sun, Moon, Bell } from 'lucide-react';
 import { membersApi } from '../../api/members.api';
 import { useAuthStore } from '../../store/authStore';
+import { useUiStore } from '../../store/uiStore';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { StatusBadge } from '../../components/ui/Badge';
@@ -26,6 +27,7 @@ export default function MemberProfilePage() {
   const isOwnProfile = !paramId || paramId === user?.memberId;
   const isAdmin = ['SUPER_ADMIN', 'ADMIN', 'SECRETARY'].includes(user?.role || '');
   const canEdit = isOwnProfile || isAdmin;
+  const { theme, toggleTheme } = useUiStore();
 
   const [editMode, setEditMode] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -304,6 +306,51 @@ export default function MemberProfilePage() {
               )) || <p className="text-sm text-slate-400">No attendance records</p>}
             </div>
           </div>
+
+          {/* Appearance — only on own profile */}
+          {isOwnProfile && (
+            <div className="card p-5">
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4">Appearance</h3>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">Theme</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Currently {theme} mode</p>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={toggleTheme}
+                  icon={theme === 'light' ? <Moon size={15} /> : <Sun size={15} />}
+                >
+                  Switch to {theme === 'light' ? 'Dark' : 'Light'}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Notification Preferences — only on own profile */}
+          {isOwnProfile && (
+            <div className="card p-5">
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
+                <Bell size={16} /> Notification Preferences
+              </h3>
+              <div className="space-y-4">
+                {[
+                  { label: 'Payment reminders', desc: 'Get notified when a payment is due' },
+                  { label: 'Event reminders', desc: 'Get notified about upcoming events' },
+                  { label: 'Announcements', desc: 'Receive community announcements' },
+                ].map(({ label, desc }) => (
+                  <div key={label} className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{label}</p>
+                      <p className="text-xs text-slate-400">{desc}</p>
+                    </div>
+                    <input type="checkbox" defaultChecked className="w-4 h-4 accent-primary-600" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

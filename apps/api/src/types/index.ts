@@ -20,10 +20,12 @@ export const MemberStatus = {
 export type MemberStatus = (typeof MemberStatus)[keyof typeof MemberStatus];
 
 export const PaymentType = {
-  JOINING_FEE: 'JOINING_FEE',
-  MONTHLY_FEE: 'MONTHLY_FEE',
-  EVENT_PAYMENT: 'EVENT_PAYMENT',
-  DONATION: 'DONATION',
+  MONTHLY_MEETING: 'MONTHLY_MEETING',
+  SPECIAL_MEETING: 'SPECIAL_MEETING',
+  COMMUNITY_EVENT: 'COMMUNITY_EVENT',
+  VOLUNTEER_EVENT: 'VOLUNTEER_EVENT',
+  RELIGIOUS_EVENT: 'RELIGIOUS_EVENT',
+  OTHER: 'OTHER',
   CUSTOM: 'CUSTOM',
 } as const;
 export type PaymentType = (typeof PaymentType)[keyof typeof PaymentType];

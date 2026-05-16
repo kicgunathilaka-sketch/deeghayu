@@ -6,6 +6,9 @@ import { getPagination, paginatedResponse } from '../../utils/pagination';
 import { generateEventQr } from '../../utils/qrCode';
 import { sendMail, eventReminderTemplate } from '../../utils/mailer';
 import { format } from 'date-fns';
+import { NotificationService } from '../notifications/notification.service';
+
+const notificationService = new NotificationService();
 
 export class EventService {
   async getAll(query: {
@@ -192,6 +195,15 @@ export class EventService {
        WHERE id = $3 RETURNING *`,
       [qrDataUrl, qrExpiresAt, id]
     );
+
+    // Notify all members
+    notificationService.broadcast({
+      title: `New Event: ${event.title}`,
+      body: `${event.title} has been published. It starts on ${format(new Date(event.startTime), 'PPP')}${event.location ? ` at ${event.location}` : ''}.`,
+      type: 'IN_APP',
+      link: `/events/${id}`,
+    }).catch(() => {}); // fire-and-forget
+
     return updated.rows[0];
   }
 

@@ -62,7 +62,7 @@ export default function PaymentsPage() {
         {isAdmin && (
           <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="input w-44">
             <option value="">All Types</option>
-            {['JOINING_FEE', 'MONTHLY_FEE', 'EVENT_PAYMENT', 'DONATION', 'CUSTOM'].map((t) => (
+            {['MONTHLY_MEETING', 'SPECIAL_MEETING', 'COMMUNITY_EVENT', 'VOLUNTEER_EVENT', 'RELIGIOUS_EVENT', 'OTHER', 'CUSTOM'].map((t) => (
               <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
             ))}
           </select>
@@ -90,7 +90,9 @@ export default function PaymentsPage() {
                       <p className="text-xs text-slate-400 font-mono">{p.member?.membershipId}</p>
                     </td>
                   )}
-                  <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{p.type?.replace(/_/g, ' ')}</td>
+                  <td className="px-4 py-3 text-slate-700 dark:text-slate-300">
+                    {p.type === 'CUSTOM' && p.customType ? p.customType : p.type?.replace(/_/g, ' ')}
+                  </td>
                   <td className="px-4 py-3 font-semibold">{formatCurrency(Number(p.amount))}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatCurrency(Number(p.paidAmount))}</td>
                   <td className="px-4 py-3"><StatusBadge status={p.status} /></td>

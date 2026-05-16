@@ -98,6 +98,7 @@ export class PaymentService {
   async create(data: {
     memberId: string;
     type: PaymentType;
+    customType?: string;
     amount: number;
     paidAmount?: number;
     dueDate?: string;
@@ -118,14 +119,19 @@ export class PaymentService {
     if (paidAmount === 0) status = 'PENDING';
     else if (paidAmount < amount) status = 'PARTIAL';
 
+    const customType = (data.type === 'CUSTOM' && data.customType?.trim())
+      ? data.customType.trim()
+      : null;
+
     const result = await pool.query(
-      `INSERT INTO payments (id, "memberId", type, status, amount, "paidAmount", "dueDate", "paidAt",
+      `INSERT INTO payments (id, "memberId", type, "customType", status, amount, "paidAmount", "dueDate", "paidAt",
                             month, year, description, "recordedBy", "createdAt", "updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW(),NOW()) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW()) RETURNING *`,
       [
         uuidv4(),
         data.memberId,
         data.type,
+        customType,
         status,
         amount,
         paidAmount,

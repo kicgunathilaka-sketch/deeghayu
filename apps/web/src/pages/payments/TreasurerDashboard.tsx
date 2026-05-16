@@ -54,7 +54,8 @@ export default function TreasurerDashboardPage() {
     onError: () => toast.error('Failed to send reminders'),
   });
 
-  const { register, handleSubmit, reset, setValue } = useForm();
+  const { register, handleSubmit, reset, setValue, watch } = useForm();
+  const paymentType = watch('type');
 
   const [memberQuery, setMemberQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -217,18 +218,23 @@ export default function TreasurerDashboardPage() {
             )}
           </div>
           <Select label="Payment Type" options={[
-            { value: 'MONTHLY_FEE', label: 'Monthly Fee' },
-            { value: 'JOINING_FEE', label: 'Joining Fee' },
-            { value: 'EVENT_PAYMENT', label: 'Event Payment' },
-            { value: 'DONATION', label: 'Donation' },
+            { value: 'MONTHLY_MEETING', label: 'Monthly Meeting' },
+            { value: 'SPECIAL_MEETING', label: 'Special Meeting' },
+            { value: 'COMMUNITY_EVENT', label: 'Community Event' },
+            { value: 'VOLUNTEER_EVENT', label: 'Volunteer Event' },
+            { value: 'RELIGIOUS_EVENT', label: 'Religious Event' },
+            { value: 'OTHER', label: 'Other' },
             { value: 'CUSTOM', label: 'Custom' },
           ]} {...register('type', { required: true })} />
+          {paymentType === 'CUSTOM' && (
+            <Input label="Custom Type" placeholder="e.g. Annual Subscription" {...register('customType', { required: true })} />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <Input label="Amount (Rs.)" type="number" step="0.01" {...register('amount', { required: true })} />
             <Input label="Paid Amount" type="number" step="0.01" {...register('paidAmount')} />
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <Input label="Month" type="number" min="1" max="12" {...register('month')} />
+            <Input label="Month" type="number" min="1" max="12" defaultValue={month} {...register('month')} />
             <Input label="Year" type="number" defaultValue={year} {...register('year')} />
           </div>
           <Input label="Description" placeholder="Optional note" {...register('description')} />
