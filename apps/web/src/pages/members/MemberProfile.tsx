@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, MapPin, CreditCard, Calendar, Shield, AlertTriangle, Pencil, Camera, X, Check, Sun, Moon, Bell, PenLine } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, MapPin, CreditCard, Calendar, Shield, AlertTriangle, Pencil, Camera, X, Check, Sun, Moon, Bell, PenLine, Plus, DollarSign } from 'lucide-react';
 import { membersApi } from '../../api/members.api';
+import { paymentsApi } from '../../api/payments.api';
 import { performanceApi } from '../../api/performance.api';
 import { useAuthStore } from '../../store/authStore';
 import { useUiStore } from '../../store/uiStore';
@@ -34,6 +35,17 @@ export default function MemberProfilePage() {
   const [editMode, setEditMode] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showSigPad, setShowSigPad] = useState(false);
+
+  // Arrear management
+  const [collectingArrear, setCollectingArrear] = useState<any | null>(null); // arrear row being paid
+  const [collectAmount, setCollectAmount] = useState('');
+  const [showAddArrear, setShowAddArrear] = useState(false);
+  const [addArrearForm, setAddArrearForm] = useState({
+    month: String(new Date().getMonth() + 1),
+    year: String(new Date().getFullYear()),
+    amount: '',
+    dueDate: '',
+  });
 
   const { data, isLoading } = useQuery({
     queryKey: ['member', memberId],
@@ -78,6 +90,60 @@ export default function MemberProfilePage() {
       toast.success('Status updated');
     },
     onError: () => toast.error('Update failed'),
+  });
+
+  const invalidateArrears = () => {
+    qc.invalidateQueries({ queryKey: ['member-arrears', memberId] });
+    qc.invalidateQueries({ queryKey: ['member', memberId] });
+    qc.invalidateQueries({ queryKey: ['performance', memberId] });
+  };
+
+  // Collect payment on an existing or UNPAID arrear row
+  const collectMutation = useMutation({
+    mutationFn: async ({ arrear, amount }: { arrear: any; amount: number }) => {
+      if (arrear.paymentId) {
+        // Existing payment record — add to paidAmount cumulatively
+        return paymentsApi.update(arrear.paymentId, { paidAmount: amount });
+      } else {
+        // No record yet (UNPAID) — create it with this payment
+        return paymentsApi.create({
+          memberId: memberId!,
+          type: 'MONTHLY_MEETING',
+          month: arrear.month,
+          year: arrear.year,
+          amount: arrear.amount,
+          paidAmount: amount,
+        });
+      }
+    },
+    onSuccess: () => {
+      invalidateArrears();
+      setCollectingArrear(null);
+      setCollectAmount('');
+      toast.success('Payment recorded');
+    },
+    onError: () => toast.error('Failed to record payment'),
+  });
+
+  // Manually add a new arrear record
+  const addArrearMutation = useMutation({
+    mutationFn: (form: typeof addArrearForm) =>
+      paymentsApi.create({
+        memberId: memberId!,
+        type: 'MONTHLY_MEETING',
+        month: Number(form.month),
+        year: Number(form.year),
+        amount: Number(form.amount),
+        paidAmount: 0,
+        dueDate: form.dueDate || undefined,
+      }),
+    onSuccess: () => {
+      invalidateArrears();
+      setShowAddArrear(false);
+      setAddArrearForm({ month: String(new Date().getMonth() + 1), year: String(new Date().getFullYear()), amount: '', dueDate: '' });
+      toast.success('Arrear added');
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.message || 'Failed to add arrear'),
   });
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -304,19 +370,31 @@ export default function MemberProfilePage() {
           </div>
 
           {/* Arrears */}
-          {arrearsData && (arrearsData.arrears.length > 0 || arrearsData.monthlyFee > 0) && (
+          {arrearsData && (
             <div className="card p-5">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                   <AlertTriangle size={16} className="text-red-500" />
                   Monthly Fee Arrears
                 </h3>
-                {arrearsData.totalArrears > 0 && (
-                  <span className="text-sm font-bold text-red-600 dark:text-red-400">
-                    Total: {formatCurrency(arrearsData.totalArrears)}
-                  </span>
-                )}
+                <div className="flex items-center gap-3">
+                  {arrearsData.totalArrears > 0 && (
+                    <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                      Total: {formatCurrency(arrearsData.totalArrears)}
+                    </span>
+                  )}
+                  {isAdmin && (
+                    <Button size="sm" variant="secondary" icon={<Plus size={13} />}
+                      onClick={() => {
+                        setAddArrearForm(f => ({ ...f, amount: String(arrearsData.monthlyFee || '') }));
+                        setShowAddArrear(true);
+                      }}>
+                      Add Arrear
+                    </Button>
+                  )}
+                </div>
               </div>
+
               {arrearsData.arrears.length === 0 ? (
                 <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">All monthly fees paid — no arrears.</p>
               ) : (
@@ -329,6 +407,7 @@ export default function MemberProfilePage() {
                         <th className="text-right text-xs font-semibold text-slate-500 uppercase pb-2">Paid</th>
                         <th className="text-right text-xs font-semibold text-slate-500 uppercase pb-2">Balance</th>
                         <th className="text-center text-xs font-semibold text-slate-500 uppercase pb-2">Status</th>
+                        {isAdmin && <th className="pb-2" />}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-100 dark:divide-surface-700">
@@ -345,12 +424,124 @@ export default function MemberProfilePage() {
                               'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
                             }`}>{a.status}</span>
                           </td>
+                          {isAdmin && (
+                            <td className="py-2 pl-3">
+                              {collectingArrear?.month === a.month && collectingArrear?.year === a.year ? (
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min="0.01"
+                                    step="0.01"
+                                    max={a.balance}
+                                    placeholder={`Max ${formatCurrency(a.balance)}`}
+                                    value={collectAmount}
+                                    onChange={(e) => setCollectAmount(e.target.value)}
+                                    className="input py-1 px-2 text-xs w-28"
+                                    autoFocus
+                                  />
+                                  <button
+                                    onClick={() => {
+                                      const amt = Number(collectAmount);
+                                      if (amt <= 0 || amt > a.balance) return;
+                                      collectMutation.mutate({ arrear: a, amount: amt });
+                                    }}
+                                    disabled={!collectAmount || collectMutation.isPending}
+                                    className="w-6 h-6 flex items-center justify-center rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40"
+                                  >
+                                    <Check size={12} />
+                                  </button>
+                                  <button
+                                    onClick={() => { setCollectingArrear(null); setCollectAmount(''); }}
+                                    className="w-6 h-6 flex items-center justify-center rounded bg-surface-200 dark:bg-surface-700 text-slate-600 dark:text-slate-300 hover:bg-surface-300"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => { setCollectingArrear(a); setCollectAmount(''); }}
+                                  className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 whitespace-nowrap"
+                                >
+                                  <DollarSign size={12} /> Collect
+                                </button>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Add Arrear Modal */}
+          {showAddArrear && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+              <div className="bg-white dark:bg-surface-900 rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-slate-900 dark:text-slate-100">Add Arrear</h3>
+                  <button onClick={() => setShowAddArrear(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="label">Month</label>
+                    <select
+                      className="input"
+                      value={addArrearForm.month}
+                      onChange={(e) => setAddArrearForm(f => ({ ...f, month: e.target.value }))}
+                    >
+                      {['January','February','March','April','May','June','July','August','September','October','November','December'].map((mn, i) => (
+                        <option key={i + 1} value={i + 1}>{mn}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">Year</label>
+                    <input
+                      type="number"
+                      className="input"
+                      value={addArrearForm.year}
+                      onChange={(e) => setAddArrearForm(f => ({ ...f, year: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">Amount (Rs.)</label>
+                  <input
+                    type="number"
+                    className="input"
+                    placeholder={`e.g. ${arrearsData?.monthlyFee || 0}`}
+                    value={addArrearForm.amount}
+                    onChange={(e) => setAddArrearForm(f => ({ ...f, amount: e.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <label className="label">Due Date (optional)</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={addArrearForm.dueDate}
+                    onChange={(e) => setAddArrearForm(f => ({ ...f, dueDate: e.target.value }))}
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <Button variant="secondary" type="button" onClick={() => setShowAddArrear(false)}>Cancel</Button>
+                  <Button
+                    type="button"
+                    loading={addArrearMutation.isPending}
+                    disabled={!addArrearForm.amount || Number(addArrearForm.amount) <= 0}
+                    onClick={() => addArrearMutation.mutate(addArrearForm)}
+                  >
+                    Add Arrear
+                  </Button>
+                </div>
+              </div>
             </div>
           )}
 

@@ -271,7 +271,7 @@ export class MemberService {
     const [settingResult, paymentsResult] = await Promise.all([
       pool.query("SELECT value FROM system_settings WHERE key = 'monthly_fee'"),
       pool.query(
-        `SELECT month, year, status, amount, "paidAmount" FROM payments
+        `SELECT id, month, year, status, amount, "paidAmount", "dueDate" FROM payments
          WHERE "memberId" = $1 AND type = 'MONTHLY_MEETING'`,
         [memberId]
       ),
@@ -297,6 +297,7 @@ export class MemberService {
     const arrears: Array<{
       year: number; month: number; monthName: string;
       amount: number; paidAmount: number; balance: number; status: string;
+      paymentId: string | null; dueDate: string | null;
     }> = [];
 
     while (y < endYear || (y === endYear && m <= endMonth)) {
@@ -304,15 +305,15 @@ export class MemberService {
 
       if (!payment) {
         if (monthlyFee > 0) {
-          arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: monthlyFee, paidAmount: 0, balance: monthlyFee, status: 'UNPAID' });
+          arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: monthlyFee, paidAmount: 0, balance: monthlyFee, status: 'UNPAID', paymentId: null, dueDate: null });
         }
       } else if (payment.status === 'PARTIAL') {
         const balance = Number(payment.amount) - Number(payment.paidAmount);
         if (balance > 0) {
-          arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: Number(payment.amount), paidAmount: Number(payment.paidAmount), balance, status: 'PARTIAL' });
+          arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: Number(payment.amount), paidAmount: Number(payment.paidAmount), balance, status: 'PARTIAL', paymentId: payment.id, dueDate: payment.dueDate });
         }
       } else if (payment.status === 'PENDING' || payment.status === 'OVERDUE') {
-        arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: Number(payment.amount), paidAmount: Number(payment.paidAmount), balance: Number(payment.amount) - Number(payment.paidAmount), status: payment.status });
+        arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: Number(payment.amount), paidAmount: Number(payment.paidAmount), balance: Number(payment.amount) - Number(payment.paidAmount), status: payment.status, paymentId: payment.id, dueDate: payment.dueDate });
       }
 
       m++;
