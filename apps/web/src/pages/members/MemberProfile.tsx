@@ -358,7 +358,11 @@ export default function MemberProfilePage() {
                     <p className="text-xs text-slate-400">{p.paidAt ? formatDate(p.paidAt) : 'Not paid'}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-semibold">{formatCurrency(Number(p.amount))}</p>
+                    <p className="text-sm font-semibold">
+                      {(p.status === 'OVERDUE' || p.status === 'PARTIAL')
+                        ? formatCurrency(Number(p.amount) - Number(p.paidAmount))
+                        : formatCurrency(Number(p.paidAmount || p.amount))}
+                    </p>
                     <StatusBadge status={p.status} />
                   </div>
                 </div>

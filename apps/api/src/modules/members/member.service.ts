@@ -261,6 +261,13 @@ export class MemberService {
       return { arrears: [], totalArrears: 0, monthlyFee: 0 };
     }
 
+    // Sync overdue status before computing arrears
+    await pool.query(`
+      UPDATE payments SET status = 'OVERDUE', "updatedAt" = NOW()
+      WHERE "memberId" = $1 AND status IN ('PENDING', 'PARTIAL')
+        AND "dueDate" IS NOT NULL AND "dueDate" < NOW()
+    `, [memberId]);
+
     const [settingResult, paymentsResult] = await Promise.all([
       pool.query("SELECT value FROM system_settings WHERE key = 'monthly_fee'"),
       pool.query(
