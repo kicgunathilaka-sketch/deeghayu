@@ -8,6 +8,7 @@ export const paymentsApi = {
   getReceipt: (id: string) => api.get(`/payments/${id}/receipt`, { responseType: 'blob' }),
   getSummary: (year: number, month?: number) => api.get('/payments/summary', { params: { year, month } }),
   getOverdue: () => api.get('/payments/overdue'),
+  bulkCreate: (data: any) => api.post('/payments/bulk-create', data),
   sendBulkReminders: (paymentIds: string[]) => api.post('/payments/bulk-reminder', { paymentIds }),
   getAnalytics: (year: number) => api.get('/payments/analytics', { params: { year } }),
 };

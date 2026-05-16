@@ -13,6 +13,7 @@ router.get('/summary', authorizeMinRole(Role.TREASURER), paymentController.getSu
 router.get('/overdue', authorizeMinRole(Role.TREASURER), paymentController.getOverdue);
 router.get('/analytics', authorizeMinRole(Role.TREASURER), paymentController.getAnalytics);
 router.post('/bulk-reminder', authorizeMinRole(Role.TREASURER), paymentController.sendBulkReminders);
+router.post('/bulk-create', authorizeMinRole(Role.TREASURER), paymentController.bulkCreate);
 router.post('/', authorizeMinRole(Role.TREASURER), paymentController.create);
 router.get('/:id', authorizeMinRole(Role.TREASURER), paymentController.getById);
 router.patch('/:id', authorizeMinRole(Role.TREASURER), paymentController.update);

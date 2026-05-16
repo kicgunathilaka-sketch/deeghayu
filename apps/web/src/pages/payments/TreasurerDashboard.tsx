@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { DollarSign, AlertTriangle, Plus, Send } from 'lucide-react';
+import { DollarSign, AlertTriangle, Plus, Send, Users, User } from 'lucide-react';
 import { paymentsApi } from '../../api/payments.api';
 import { membersApi } from '../../api/members.api';
 import { Button } from '../../components/ui/Button';
@@ -37,13 +37,24 @@ export default function TreasurerDashboardPage() {
     queryFn: () => paymentsApi.getOverdue().then((r) => r.data.data),
   });
 
+  const [scope, setScope] = useState<'individual' | 'all'>('individual');
+
   const addPaymentMutation = useMutation({
-    mutationFn: (data: any) => paymentsApi.create(data),
-    onSuccess: () => {
+    mutationFn: (data: any) =>
+      scope === 'all'
+        ? paymentsApi.bulkCreate(data)
+        : paymentsApi.create(data),
+    onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ['payment-summary'] });
+      qc.invalidateQueries({ queryKey: ['overdue-payments'] });
       setShowAddModal(false);
       resetForm();
-      toast.success('Payment recorded');
+      if (scope === 'all') {
+        const { created, skipped } = res.data.data;
+        toast.success(`Created ${created} payment(s)${skipped ? `, skipped ${skipped} already recorded` : ''}`);
+      } else {
+        toast.success('Payment recorded');
+      }
     },
     onError: () => toast.error('Failed to record payment'),
   });
@@ -56,6 +67,17 @@ export default function TreasurerDashboardPage() {
 
   const { register, handleSubmit, reset, setValue, watch } = useForm();
   const paymentType = watch('type');
+  const watchedDueDate = watch('dueDate');
+
+  useEffect(() => {
+    if (watchedDueDate) {
+      const d = new Date(watchedDueDate);
+      if (!isNaN(d.getTime())) {
+        setValue('month', d.getMonth() + 1);
+        setValue('year', d.getFullYear());
+      }
+    }
+  }, [watchedDueDate, setValue]);
 
   const [memberQuery, setMemberQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -95,6 +117,7 @@ export default function TreasurerDashboardPage() {
     reset();
     setSelectedMember(null);
     setMemberQuery('');
+    setScope('individual');
   };
 
   const chartData = analytics?.map((d: any) => ({ name: MONTHS[d.month - 1], income: d.income })) || [];
@@ -180,43 +203,86 @@ export default function TreasurerDashboardPage() {
 
       {/* Add Payment Modal */}
       <Modal isOpen={showAddModal} onClose={() => { setShowAddModal(false); resetForm(); }} title="Record Payment">
-        <form onSubmit={handleSubmit((data) => addPaymentMutation.mutate(data))} className="space-y-4">
-          {/* Member autocomplete */}
-          <div ref={memberRef} className="relative w-full">
-            <label className="label">Member</label>
-            <input type="hidden" {...register('memberId', { required: true })} />
-            {selectedMember ? (
-              <div className="input flex items-center justify-between">
-                <span className="text-slate-900 dark:text-slate-100 text-sm">
-                  {selectedMember.fullName}
-                  <span className="ml-2 text-xs text-slate-400">{selectedMember.membershipId}</span>
-                </span>
-                <button type="button" onClick={clearMember} className="text-slate-400 hover:text-slate-600 text-xs ml-2">✕</button>
-              </div>
-            ) : (
-              <input
-                className="input"
-                placeholder="Search by name or member ID..."
-                value={memberQuery}
-                onChange={(e) => { setMemberQuery(e.target.value); setShowSuggestions(true); }}
-                onFocus={() => setShowSuggestions(true)}
-              />
-            )}
-            {showSuggestions && !selectedMember && (memberSuggestions?.length ?? 0) > 0 && (
-              <ul className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shadow-lg max-h-52 overflow-y-auto">
-                {memberSuggestions!.map((m: any) => (
-                  <li
-                    key={m.id}
-                    onMouseDown={() => handleMemberSelect({ id: m.id, fullName: m.fullName, membershipId: m.membershipId })}
-                    className="px-4 py-2.5 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-700 flex items-center justify-between"
-                  >
-                    <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{m.fullName}</span>
-                    <span className="text-xs text-slate-400">{m.membershipId}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+        <form onSubmit={handleSubmit((data) => {
+          if (scope === 'all') {
+            addPaymentMutation.mutate({ scope: 'ALL', ...data });
+          } else {
+            addPaymentMutation.mutate(data);
+          }
+        })} className="space-y-4">
+
+          {/* Scope toggle */}
+          <div className="flex rounded-xl border border-surface-200 dark:border-surface-700 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setScope('individual')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors ${
+                scope === 'individual'
+                  ? 'bg-primary-600 text-white'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-surface-50 dark:hover:bg-surface-800'
+              }`}
+            >
+              <User size={15} /> Individual Member
+            </button>
+            <button
+              type="button"
+              onClick={() => setScope('all')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors ${
+                scope === 'all'
+                  ? 'bg-primary-600 text-white'
+                  : 'text-slate-600 dark:text-slate-300 hover:bg-surface-50 dark:hover:bg-surface-800'
+              }`}
+            >
+              <Users size={15} /> All Active Members
+            </button>
           </div>
+
+          {scope === 'all' && (
+            <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-amber-700 dark:text-amber-400 text-xs">
+              <AlertTriangle size={14} className="mt-0.5 shrink-0" />
+              Creates a pending payment for every active member. Members already recorded for this type/month/year are skipped. Once the due date passes, all unpaid become overdue.
+            </div>
+          )}
+
+          {/* Member autocomplete — individual only */}
+          {scope === 'individual' && (
+            <div ref={memberRef} className="relative w-full">
+              <label className="label">Member</label>
+              <input type="hidden" {...register('memberId', { required: scope === 'individual' })} />
+              {selectedMember ? (
+                <div className="input flex items-center justify-between">
+                  <span className="text-slate-900 dark:text-slate-100 text-sm">
+                    {selectedMember.fullName}
+                    <span className="ml-2 text-xs text-slate-400">{selectedMember.membershipId}</span>
+                  </span>
+                  <button type="button" onClick={clearMember} className="text-slate-400 hover:text-slate-600 text-xs ml-2">✕</button>
+                </div>
+              ) : (
+                <input
+                  className="input"
+                  placeholder="Search by name or member ID..."
+                  value={memberQuery}
+                  onChange={(e) => { setMemberQuery(e.target.value); setShowSuggestions(true); }}
+                  onFocus={() => setShowSuggestions(true)}
+                />
+              )}
+              {showSuggestions && !selectedMember && (memberSuggestions?.length ?? 0) > 0 && (
+                <ul className="absolute z-50 left-0 right-0 mt-1 bg-white dark:bg-surface-800 border border-surface-200 dark:border-surface-700 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                  {memberSuggestions!.map((m: any) => (
+                    <li
+                      key={m.id}
+                      onMouseDown={() => handleMemberSelect({ id: m.id, fullName: m.fullName, membershipId: m.membershipId })}
+                      className="px-4 py-2.5 cursor-pointer hover:bg-surface-50 dark:hover:bg-surface-700 flex items-center justify-between"
+                    >
+                      <span className="text-sm font-medium text-slate-900 dark:text-slate-100">{m.fullName}</span>
+                      <span className="text-xs text-slate-400">{m.membershipId}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
           <Select label="Payment Type" options={[
             { value: 'MONTHLY_MEETING', label: 'Monthly Meeting' },
             { value: 'SPECIAL_MEETING', label: 'Special Meeting' },
@@ -226,21 +292,40 @@ export default function TreasurerDashboardPage() {
             { value: 'OTHER', label: 'Other' },
             { value: 'CUSTOM', label: 'Custom' },
           ]} {...register('type', { required: true })} />
+
           {paymentType === 'CUSTOM' && (
             <Input label="Custom Type" placeholder="e.g. Annual Subscription" {...register('customType', { required: true })} />
           )}
+
           <div className="grid grid-cols-2 gap-3">
             <Input label="Amount (Rs.)" type="number" step="0.01" {...register('amount', { required: true })} />
-            <Input label="Paid Amount" type="number" step="0.01" {...register('paidAmount')} />
+            {scope === 'individual' && (
+              <Input label="Paid Amount" type="number" step="0.01" placeholder="Leave blank = fully paid" {...register('paidAmount')} />
+            )}
           </div>
+
+          {/* Due date — auto-fills month/year */}
+          <div>
+            <Input
+              label={scope === 'all' ? 'Due Date & Time (payment deadline)' : 'Due Date & Time (optional)'}
+              type="datetime-local"
+              {...register('dueDate', { required: scope === 'all' })}
+            />
+            <p className="text-xs text-slate-400 mt-1">Month and year are auto-filled from this date</p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <Input label="Month" type="number" min="1" max="12" defaultValue={month} {...register('month')} />
             <Input label="Year" type="number" defaultValue={year} {...register('year')} />
           </div>
+
           <Input label="Description" placeholder="Optional note" {...register('description')} />
+
           <div className="flex gap-2 justify-end pt-2">
             <Button variant="secondary" type="button" onClick={() => { setShowAddModal(false); resetForm(); }}>Cancel</Button>
-            <Button type="submit" loading={addPaymentMutation.isPending}>Record</Button>
+            <Button type="submit" loading={addPaymentMutation.isPending}>
+              {scope === 'all' ? 'Create for All Members' : 'Record Payment'}
+            </Button>
           </div>
         </form>
       </Modal>

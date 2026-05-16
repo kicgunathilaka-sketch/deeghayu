@@ -42,6 +42,11 @@ export const getOverdue = async (req: Request, res: Response) => {
   res.json({ success: true, data: result });
 };
 
+export const bulkCreate = async (req: Request, res: Response) => {
+  const result = await paymentService.bulkCreate({ ...req.body, recordedBy: req.user!.id });
+  res.status(201).json({ success: true, data: result });
+};
+
 export const sendBulkReminders = async (req: Request, res: Response) => {
   const result = await paymentService.sendBulkReminders(req.body.paymentIds);
   res.json({ success: true, data: result });

@@ -203,6 +203,63 @@ export class PaymentService {
     return result.rows[0];
   }
 
+  async bulkCreate(data: {
+    scope: 'ALL' | 'MEMBERS';
+    memberIds?: string[];
+    type: PaymentType;
+    customType?: string;
+    amount: number;
+    dueDate: string;
+    month?: number;
+    year?: number;
+    description?: string;
+    recordedBy: string;
+  }) {
+    let memberIds: string[];
+    if (data.scope === 'ALL') {
+      const res = await pool.query(`SELECT id FROM members WHERE status = 'ACTIVE'`);
+      memberIds = res.rows.map((r: any) => r.id);
+    } else {
+      memberIds = data.memberIds || [];
+    }
+    if (memberIds.length === 0) return { created: 0, skipped: 0 };
+
+    const amount = Number(data.amount);
+    const dueDate = new Date(data.dueDate);
+    const isPastDue = dueDate < new Date();
+    const status: PaymentStatus = isPastDue ? 'OVERDUE' : 'PENDING';
+    const customType = (data.type === 'CUSTOM' && data.customType?.trim()) ? data.customType.trim() : null;
+    const month = data.month || (dueDate.getMonth() + 1);
+    const year = data.year || dueDate.getFullYear();
+
+    // Skip members who already have a payment for this type/month/year
+    const existingRes = await pool.query(
+      `SELECT "memberId" FROM payments WHERE type = $1 AND month = $2 AND year = $3 AND "memberId" = ANY($4::text[])`,
+      [data.type, month, year, memberIds]
+    );
+    const existingSet = new Set<string>(existingRes.rows.map((r: any) => r.memberId));
+    const toCreate = memberIds.filter((id) => !existingSet.has(id));
+
+    if (toCreate.length === 0) return { created: 0, skipped: memberIds.length };
+
+    const rows: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+    for (const memberId of toCreate) {
+      rows.push(`($${i},$${i+1},$${i+2},$${i+3},$${i+4},$${i+5},$${i+6},$${i+7},NULL,$${i+8},$${i+9},$${i+10},$${i+11},NOW(),NOW())`);
+      params.push(uuidv4(), memberId, data.type, customType, status, amount, 0, dueDate, month, year, data.description || null, data.recordedBy);
+      i += 12;
+    }
+
+    await pool.query(
+      `INSERT INTO payments (id, "memberId", type, "customType", status, amount, "paidAmount", "dueDate", "paidAt", month, year, description, "recordedBy", "createdAt", "updatedAt")
+       VALUES ${rows.join(',')}`,
+      params
+    );
+
+    return { created: toCreate.length, skipped: existingSet.size };
+  }
+
   async getReceipt(id: string): Promise<Buffer> {
     const payment = await this.getById(id);
     if (payment.status !== 'PAID' && payment.status !== 'PARTIAL') {
