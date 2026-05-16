@@ -92,9 +92,10 @@ CREATE TABLE payments (
   year         INT,
   description  TEXT,
   "customType" TEXT,
-  "eventId"    TEXT REFERENCES payment_events(id),
-  "receiptUrl" TEXT,
-  "recordedBy" TEXT,
+  "eventId"       TEXT REFERENCES payment_events(id),
+  "bankAccountId" TEXT REFERENCES bank_accounts(id),
+  "receiptUrl"    TEXT,
+  "recordedBy"    TEXT,
   "createdAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   "updatedAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -103,19 +104,33 @@ CREATE INDEX idx_payments_status ON payments(status);
 CREATE INDEX idx_payments_type ON payments(type);
 CREATE INDEX idx_payments_year_month ON payments(year, month);
 
+-- BANK ACCOUNTS
+CREATE TABLE bank_accounts (
+  id               TEXT PRIMARY KEY,
+  name             TEXT NOT NULL,
+  "accountNumber"  TEXT,
+  "openingBalance" NUMERIC(10,2) NOT NULL DEFAULT 0,
+  description      TEXT,
+  "isActive"       BOOLEAN NOT NULL DEFAULT true,
+  "createdBy"      TEXT NOT NULL REFERENCES users(id),
+  "createdAt"      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  "updatedAt"      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- EXPENSES
 CREATE TABLE expenses (
   id           TEXT PRIMARY KEY,
   title        TEXT NOT NULL,
   amount       NUMERIC(10,2) NOT NULL,
   category     TEXT NOT NULL,
-  description  TEXT,
-  "receiptUrl" TEXT,
-  date         TIMESTAMPTZ NOT NULL,
-  "recordedBy" TEXT NOT NULL,
-  year         INT NOT NULL,
-  month        INT NOT NULL,
-  "createdAt"  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  description     TEXT,
+  "receiptUrl"    TEXT,
+  date            TIMESTAMPTZ NOT NULL,
+  "bankAccountId" TEXT REFERENCES bank_accounts(id),
+  "recordedBy"    TEXT NOT NULL,
+  year            INT NOT NULL,
+  month           INT NOT NULL,
+  "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_expenses_year_month ON expenses(year, month);
 

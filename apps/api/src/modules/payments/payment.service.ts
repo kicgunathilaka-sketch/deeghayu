@@ -105,6 +105,7 @@ export class PaymentService {
     month?: number;
     year?: number;
     description?: string;
+    bankAccountId?: string;
     recordedBy: string;
   }) {
     const memberCheck = await pool.query('SELECT id FROM members WHERE id = $1', [data.memberId]);
@@ -146,8 +147,8 @@ export class PaymentService {
 
     const result = await pool.query(
       `INSERT INTO payments (id, "memberId", type, "customType", status, amount, "paidAmount", "dueDate", "paidAt",
-                            month, year, description, "recordedBy", "createdAt", "updatedAt")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,NOW(),NOW()) RETURNING *`,
+                            month, year, description, "bankAccountId", "recordedBy", "createdAt", "updatedAt")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW(),NOW()) RETURNING *`,
       [
         uuidv4(),
         data.memberId,
@@ -161,6 +162,7 @@ export class PaymentService {
         data.month ? Number(data.month) : null,
         data.year ? Number(data.year) : null,
         data.description || null,
+        data.bankAccountId || null,
         data.recordedBy,
       ]
     );

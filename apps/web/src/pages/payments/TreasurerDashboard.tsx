@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { DollarSign, AlertTriangle, Plus, Send, CalendarClock, ChevronRight } from 'lucide-react';
+import { DollarSign, AlertTriangle, Plus, Send, CalendarClock, ChevronRight, Landmark, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { paymentsApi } from '../../api/payments.api';
 import { paymentEventsApi } from '../../api/paymentEvents.api';
 import { membersApi } from '../../api/members.api';
+import { bankAccountsApi } from '../../api/bankAccounts.api';
 import { Button } from '../../components/ui/Button';
 import { StatCard } from '../../components/ui/StatCard';
 import { StatusBadge } from '../../components/ui/Badge';
@@ -24,6 +25,7 @@ export default function TreasurerDashboardPage() {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEventModal, setShowEventModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
   const [selectedOverdue, setSelectedOverdue] = useState<string[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
@@ -49,17 +51,39 @@ export default function TreasurerDashboardPage() {
     refetchInterval: 30_000,
   });
 
+  const { data: bankAccounts } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => bankAccountsApi.getAll().then((r) => r.data.data),
+  });
+
+  // ── Bank account mutation ─────────────────────────────────────────────────
+  const { register: regAcct, handleSubmit: handleAcct, reset: resetAcct } = useForm();
+  const createAccountMutation = useMutation({
+    mutationFn: (data: any) => bankAccountsApi.create(data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['bank-accounts'] });
+      setShowAccountModal(false);
+      resetAcct();
+      toast.success('Bank account created');
+    },
+    onError: () => toast.error('Failed to create bank account'),
+  });
+
   // ── Individual payment mutation ───────────────────────────────────────────
   const addPaymentMutation = useMutation({
     mutationFn: (data: any) => paymentsApi.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['payment-summary'] });
       qc.invalidateQueries({ queryKey: ['overdue-payments'] });
+      qc.invalidateQueries({ queryKey: ['bank-accounts'] });
       setShowAddModal(false);
       resetPaymentForm();
       toast.success('Payment recorded');
     },
-    onError: () => toast.error('Failed to record payment'),
+    onError: (err: any) => {
+      const msg = err?.response?.data?.message || 'Failed to record payment';
+      toast.error(msg);
+    },
   });
 
   // ── Payment event mutation ────────────────────────────────────────────────
@@ -166,6 +190,51 @@ export default function TreasurerDashboardPage() {
             <Bar dataKey="income" fill="#0284c7" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* Bank Accounts */}
+      <div className="card overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-surface-200 dark:border-surface-700">
+          <h2 className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+            <Landmark size={16} className="text-slate-400" />
+            Bank Accounts
+          </h2>
+          <Button size="sm" variant="secondary" icon={<Plus size={14} />} onClick={() => setShowAccountModal(true)}>
+            New Account
+          </Button>
+        </div>
+        {(bankAccounts?.length ?? 0) === 0 ? (
+          <p className="px-5 py-4 text-sm text-slate-400">No bank accounts yet. Create one to start tracking balances.</p>
+        ) : (
+          <div className="divide-y divide-surface-100 dark:divide-surface-700">
+            {(bankAccounts ?? []).map((acct: any) => {
+              const balancePositive = acct.balance >= 0;
+              return (
+                <div key={acct.id} className="px-5 py-4 flex items-center justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-slate-900 dark:text-slate-100">{acct.name}</p>
+                    {acct.accountNumber && (
+                      <p className="text-xs text-slate-400 mt-0.5">A/C {acct.accountNumber}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-6 text-sm">
+                    <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                      <ArrowDownLeft size={14} />
+                      <span>{formatCurrency(acct.totalIn)}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-red-500 dark:text-red-400">
+                      <ArrowUpRight size={14} />
+                      <span>{formatCurrency(acct.totalOut)}</span>
+                    </div>
+                    <div className={`font-semibold text-base ${balancePositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                      {formatCurrency(acct.balance)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Active Payment Events */}
@@ -328,6 +397,16 @@ export default function TreasurerDashboardPage() {
             <Input label="Month" type="number" min="1" max="12" defaultValue={month} {...register('month')} />
             <Input label="Year" type="number" defaultValue={year} {...register('year')} />
           </div>
+          {(bankAccounts?.length ?? 0) > 0 && (
+            <Select
+              label="Bank Account (optional)"
+              options={[
+                { value: '', label: 'No account' },
+                ...(bankAccounts ?? []).map((a: any) => ({ value: a.id, label: a.name })),
+              ]}
+              {...register('bankAccountId')}
+            />
+          )}
           <Input label="Description" placeholder="Optional note" {...register('description')} />
           <div className="flex gap-2 justify-end pt-2">
             <Button variant="secondary" type="button" onClick={() => { setShowAddModal(false); resetPaymentForm(); }}>Cancel</Button>
@@ -375,6 +454,20 @@ export default function TreasurerDashboardPage() {
           <div className="flex gap-2 justify-end pt-2">
             <Button variant="secondary" type="button" onClick={() => { setShowEventModal(false); resetEventForm(); }}>Cancel</Button>
             <Button type="submit" loading={createEventMutation.isPending}>Create Payment Event</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ── New Bank Account Modal ───────────────────────────────────────── */}
+      <Modal isOpen={showAccountModal} onClose={() => { setShowAccountModal(false); resetAcct(); }} title="New Bank Account">
+        <form onSubmit={handleAcct((data) => createAccountMutation.mutate(data))} className="space-y-4">
+          <Input label="Account Name" placeholder="e.g. Main Operations Account" {...regAcct('name', { required: true })} />
+          <Input label="Account Number (optional)" placeholder="e.g. 00123456789" {...regAcct('accountNumber')} />
+          <Input label="Opening Balance (Rs.)" type="number" step="0.01" defaultValue={0} {...regAcct('openingBalance')} />
+          <Input label="Description (optional)" placeholder="Optional note" {...regAcct('description')} />
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="secondary" type="button" onClick={() => { setShowAccountModal(false); resetAcct(); }}>Cancel</Button>
+            <Button type="submit" loading={createAccountMutation.isPending}>Create Account</Button>
           </div>
         </form>
       </Modal>

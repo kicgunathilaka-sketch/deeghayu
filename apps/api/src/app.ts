@@ -21,6 +21,8 @@ import notificationRoutes from './modules/notifications/notification.routes';
 import reportRoutes from './modules/reports/report.routes';
 import uploadRoutes from './modules/upload/upload.routes';
 import galleryRoutes from './modules/gallery/gallery.routes';
+import bankAccountRoutes from './modules/bank-accounts/bank-account.routes';
+import expenseRoutes from './modules/expenses/expense.routes';
 
 const app = express();
 
@@ -93,6 +95,8 @@ app.use(`${API_PREFIX}/notifications`, notificationRoutes);
 app.use(`${API_PREFIX}/reports`, reportRoutes);
 app.use(`${API_PREFIX}/upload`, uploadRoutes);
 app.use(`${API_PREFIX}/gallery`, galleryRoutes);
+app.use(`${API_PREFIX}/bank-accounts`, bankAccountRoutes);
+app.use(`${API_PREFIX}/expenses`, expenseRoutes);
 
 // 404
 app.use((_req, res) => {
