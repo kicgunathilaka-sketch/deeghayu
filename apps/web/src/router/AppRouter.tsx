@@ -47,6 +47,9 @@ import GalleryPage from '../pages/gallery/GalleryPage';
 // Documents
 import DocumentsPage from '../pages/documents/DocumentsPage';
 
+// Performance
+import PerformancePage from '../pages/performance/PerformancePage';
+
 // Settings
 import SettingsPage from '../pages/settings/SettingsPage';
 
@@ -120,6 +123,9 @@ export default function AppRouter() {
 
         {/* Gallery */}
         <Route path="/gallery" element={<GalleryPage />} />
+
+        {/* Performance */}
+        <Route path="/performance" element={<PerformancePage />} />
 
         {/* Documents */}
         <Route path="/documents" element={<AdminRoute><DocumentsPage /></AdminRoute>} />

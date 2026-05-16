@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Phone, MapPin, CreditCard, Calendar, Shield, AlertTriangle, Pencil, Camera, X, Check, Sun, Moon, Bell, PenLine } from 'lucide-react';
 import { membersApi } from '../../api/members.api';
+import { performanceApi } from '../../api/performance.api';
 import { useAuthStore } from '../../store/authStore';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../../components/ui/Button';
@@ -46,6 +47,13 @@ export default function MemberProfilePage() {
     queryFn: () => membersApi.getArrears(memberId!).then((r) => r.data.data),
     enabled: !!memberId,
     staleTime: 0,
+  });
+
+  const { data: perfData } = useQuery({
+    queryKey: ['performance', memberId],
+    queryFn: () => performanceApi.getById(memberId!).then((r) => r.data.data),
+    enabled: !!memberId,
+    staleTime: 60_000,
   });
 
   const { register, handleSubmit, reset } = useForm();
@@ -343,6 +351,75 @@ export default function MemberProfilePage() {
                   </table>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Performance Score */}
+          {perfData && (
+            <div className="card p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                  Performance Score
+                </h3>
+                <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
+                  perfData.grade === 'Excellent' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                  perfData.grade === 'Good' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                  perfData.grade === 'Average' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                  perfData.grade === 'Fair' ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' :
+                  'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                }`}>{perfData.grade}</span>
+              </div>
+
+              <div className="flex items-center gap-5">
+                {/* Score ring */}
+                <div className="relative shrink-0">
+                  <svg width={80} height={80} style={{ transform: 'rotate(-90deg)' }}>
+                    <circle cx={40} cy={40} r={33} fill="none" stroke="#e2e8f0" strokeWidth={7} />
+                    <circle
+                      cx={40} cy={40} r={33}
+                      fill="none"
+                      stroke={perfData.gradeColor}
+                      strokeWidth={7}
+                      strokeDasharray={`${(perfData.score / 100) * 2 * Math.PI * 33} ${2 * Math.PI * 33}`}
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center font-bold text-lg" style={{ color: perfData.gradeColor }}>
+                    {perfData.score}
+                  </span>
+                </div>
+
+                {/* Breakdown bars */}
+                <div className="flex-1 space-y-3">
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-slate-500">Attendance</span>
+                      <span className="font-medium text-slate-700 dark:text-slate-300">{perfData.breakdown.attendance.score}/{perfData.breakdown.attendance.maxScore}</span>
+                    </div>
+                    <div className="h-2 bg-surface-100 dark:bg-surface-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${(perfData.breakdown.attendance.score / 40) * 100}%` }} />
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {perfData.breakdown.attendance.attended}/{perfData.breakdown.attendance.totalEvents} events
+                      {perfData.breakdown.attendance.late > 0 ? ` · ${perfData.breakdown.attendance.late} late` : ''}
+                    </p>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-slate-500">Payments</span>
+                      <span className="font-medium text-slate-700 dark:text-slate-300">{perfData.breakdown.payments.score}/{perfData.breakdown.payments.maxScore}</span>
+                    </div>
+                    <div className="h-2 bg-surface-100 dark:bg-surface-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${(perfData.breakdown.payments.score / 60) * 100}%` }} />
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {perfData.breakdown.payments.paidOnTime} on time
+                      {perfData.breakdown.payments.overdue > 0 ? ` · ${perfData.breakdown.payments.overdue} overdue` : ''}
+                      {perfData.breakdown.payments.unpaid > 0 ? ` · ${perfData.breakdown.payments.unpaid} unpaid` : ''}
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
