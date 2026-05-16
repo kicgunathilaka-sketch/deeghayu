@@ -123,6 +123,27 @@ export class PaymentService {
       ? data.customType.trim()
       : null;
 
+    // Auto-set dueDate from the matching MONTHLY_MEETING event when not provided
+    let dueDate: Date | null = data.dueDate ? new Date(data.dueDate) : null;
+    if (!dueDate && data.type === 'MONTHLY_MEETING' && data.month && data.year) {
+      const eventRes = await pool.query(
+        `SELECT "startTime" FROM events
+         WHERE category = 'MONTHLY_MEETING'
+           AND EXTRACT(MONTH FROM "startTime") = $1
+           AND EXTRACT(YEAR FROM "startTime") = $2
+         ORDER BY "startTime" ASC LIMIT 1`,
+        [data.month, data.year]
+      );
+      if (eventRes.rows[0]) {
+        dueDate = new Date(eventRes.rows[0].startTime);
+      }
+    }
+
+    // If dueDate is already past and payment is not fully paid, mark as OVERDUE immediately
+    if (dueDate && dueDate < new Date() && status !== 'PAID') {
+      status = 'OVERDUE';
+    }
+
     const result = await pool.query(
       `INSERT INTO payments (id, "memberId", type, "customType", status, amount, "paidAmount", "dueDate", "paidAt",
                             month, year, description, "recordedBy", "createdAt", "updatedAt")
@@ -135,7 +156,7 @@ export class PaymentService {
         status,
         amount,
         paidAmount,
-        data.dueDate ? new Date(data.dueDate) : null,
+        dueDate,
         paidAmount > 0 ? new Date() : null,
         data.month ? Number(data.month) : null,
         data.year ? Number(data.year) : null,
@@ -160,9 +181,11 @@ export class PaymentService {
 
     const updatedPaidAmount = data.paidAmount ?? Number(payment.paidAmount);
     const amount = Number(payment.amount);
+    const isPastDue = payment.dueDate && new Date(payment.dueDate) < new Date();
     let status = data.status;
     if (!status) {
       if (updatedPaidAmount >= amount) status = 'PAID';
+      else if (isPastDue) status = 'OVERDUE';
       else if (updatedPaidAmount > 0) status = 'PARTIAL';
       else status = 'PENDING';
     }
@@ -249,7 +272,8 @@ export class PaymentService {
        FROM payments p
        JOIN members m ON m.id = p."memberId"
        JOIN users u ON u.id = m."userId"
-       WHERE p.status = 'OVERDUE' OR (p.status = 'PENDING' AND p."dueDate" < NOW())
+       WHERE p.status = 'OVERDUE'
+          OR (p.status IN ('PENDING', 'PARTIAL') AND p."dueDate" IS NOT NULL AND p."dueDate" < NOW())
        ORDER BY p."dueDate" ASC`
     );
 
