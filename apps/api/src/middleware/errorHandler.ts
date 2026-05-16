@@ -26,7 +26,7 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
 
   return res.status(500).json({
     success: false,
-    message: config.isProduction ? 'Internal server error' : err.message,
-    ...(config.isDevelopment && { stack: err.stack }),
+    message: err.message,
+    stack: err.stack,
   });
 }
