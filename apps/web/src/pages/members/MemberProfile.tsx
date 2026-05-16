@@ -5,6 +5,7 @@ import { ArrowLeft, Mail, Phone, MapPin, CreditCard, Calendar, Shield, AlertTria
 import { membersApi } from '../../api/members.api';
 import { paymentsApi } from '../../api/payments.api';
 import { performanceApi } from '../../api/performance.api';
+import { bankAccountsApi } from '../../api/bankAccounts.api';
 import { useAuthStore } from '../../store/authStore';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../../components/ui/Button';
@@ -39,6 +40,7 @@ export default function MemberProfilePage() {
   // Arrear management
   const [collectingArrear, setCollectingArrear] = useState<any | null>(null); // arrear row being paid
   const [collectAmount, setCollectAmount] = useState('');
+  const [collectBankAccountId, setCollectBankAccountId] = useState<string>('');
   const [showAddArrear, setShowAddArrear] = useState(false);
   const [addArrearForm, setAddArrearForm] = useState({
     month: String(new Date().getMonth() + 1),
@@ -66,6 +68,13 @@ export default function MemberProfilePage() {
     queryFn: () => performanceApi.getById(memberId!).then((r) => r.data.data),
     enabled: !!memberId,
     staleTime: 60_000,
+  });
+
+  const { data: bankAccounts } = useQuery({
+    queryKey: ['bank-accounts'],
+    queryFn: () => bankAccountsApi.getAll().then((r) => r.data.data as any[]),
+    staleTime: 60_000,
+    enabled: isAdmin,
   });
 
   const { register, handleSubmit, reset } = useForm();
@@ -100,10 +109,11 @@ export default function MemberProfilePage() {
 
   // Collect payment on an existing or UNPAID arrear row
   const collectMutation = useMutation({
-    mutationFn: async ({ arrear, amount }: { arrear: any; amount: number }) => {
+    mutationFn: async ({ arrear, amount, bankAccountId }: { arrear: any; amount: number; bankAccountId?: string }) => {
+      const bankId = bankAccountId || undefined;
       if (arrear.paymentId) {
         // Existing payment record — add to paidAmount cumulatively
-        return paymentsApi.update(arrear.paymentId, { paidAmount: amount });
+        return paymentsApi.update(arrear.paymentId, { paidAmount: amount, bankAccountId: bankId });
       } else {
         // No record yet (UNPAID) — create it with this payment
         return paymentsApi.create({
@@ -113,13 +123,16 @@ export default function MemberProfilePage() {
           year: arrear.year,
           amount: arrear.amount,
           paidAmount: amount,
+          bankAccountId: bankId,
         });
       }
     },
     onSuccess: () => {
       invalidateArrears();
+      qc.invalidateQueries({ queryKey: ['bank-accounts'] });
       setCollectingArrear(null);
       setCollectAmount('');
+      setCollectBankAccountId('');
       toast.success('Payment recorded');
     },
     onError: () => toast.error('Failed to record payment'),
@@ -427,39 +440,62 @@ export default function MemberProfilePage() {
                           {isAdmin && (
                             <td className="py-2 pl-3">
                               {collectingArrear?.month === a.month && collectingArrear?.year === a.year ? (
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="number"
-                                    min="0.01"
-                                    step="0.01"
-                                    max={a.balance}
-                                    placeholder={`Max ${formatCurrency(a.balance)}`}
-                                    value={collectAmount}
-                                    onChange={(e) => setCollectAmount(e.target.value)}
-                                    className="input py-1 px-2 text-xs w-28"
-                                    autoFocus
-                                  />
-                                  <button
-                                    onClick={() => {
-                                      const amt = Number(collectAmount);
-                                      if (amt <= 0 || amt > a.balance) return;
-                                      collectMutation.mutate({ arrear: a, amount: amt });
-                                    }}
-                                    disabled={!collectAmount || collectMutation.isPending}
-                                    className="w-6 h-6 flex items-center justify-center rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40"
-                                  >
-                                    <Check size={12} />
-                                  </button>
-                                  <button
-                                    onClick={() => { setCollectingArrear(null); setCollectAmount(''); }}
-                                    className="w-6 h-6 flex items-center justify-center rounded bg-surface-200 dark:bg-surface-700 text-slate-600 dark:text-slate-300 hover:bg-surface-300"
-                                  >
-                                    <X size={12} />
-                                  </button>
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min="0.01"
+                                      step="0.01"
+                                      max={a.balance}
+                                      placeholder={`Max ${formatCurrency(a.balance)}`}
+                                      value={collectAmount}
+                                      onChange={(e) => setCollectAmount(e.target.value)}
+                                      className="input py-1 px-2 text-xs w-28"
+                                      autoFocus
+                                    />
+                                    <button
+                                      onClick={() => {
+                                        const amt = Number(collectAmount);
+                                        if (amt <= 0 || amt > a.balance) return;
+                                        collectMutation.mutate({ arrear: a, amount: amt, bankAccountId: collectBankAccountId || undefined });
+                                      }}
+                                      disabled={!collectAmount || collectMutation.isPending}
+                                      className="w-6 h-6 flex items-center justify-center rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40"
+                                    >
+                                      <Check size={12} />
+                                    </button>
+                                    <button
+                                      onClick={() => { setCollectingArrear(null); setCollectAmount(''); setCollectBankAccountId(''); }}
+                                      className="w-6 h-6 flex items-center justify-center rounded bg-surface-200 dark:bg-surface-700 text-slate-600 dark:text-slate-300 hover:bg-surface-300"
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                  {bankAccounts && bankAccounts.length > 1 && (
+                                    <select
+                                      value={collectBankAccountId}
+                                      onChange={(e) => setCollectBankAccountId(e.target.value)}
+                                      className="input py-1 px-2 text-xs"
+                                    >
+                                      <option value="">No bank account</option>
+                                      {bankAccounts.map((acc: any) => (
+                                        <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                      ))}
+                                    </select>
+                                  )}
+                                  {bankAccounts && bankAccounts.length === 1 && (
+                                    <p className="text-xs text-slate-400">→ {bankAccounts[0].name}</p>
+                                  )}
                                 </div>
                               ) : (
                                 <button
-                                  onClick={() => { setCollectingArrear(a); setCollectAmount(''); }}
+                                  onClick={() => {
+                                    setCollectingArrear(a);
+                                    setCollectAmount('');
+                                    // Auto-select if exactly one account
+                                    if (bankAccounts?.length === 1) setCollectBankAccountId(bankAccounts[0].id);
+                                    else setCollectBankAccountId('');
+                                  }}
                                   className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 whitespace-nowrap"
                                 >
                                   <DollarSign size={12} /> Collect

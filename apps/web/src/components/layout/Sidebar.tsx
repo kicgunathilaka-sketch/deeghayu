@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, CreditCard, Calendar, QrCode,
   Users2, BarChart3, Bell, Settings, LogOut, ChevronLeft,
-  Shield, Wallet, ClipboardList, Images, FileText, Trophy
+  Shield, Wallet, ClipboardList, Images, FileText, Trophy, ArrowUpRight
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useUiStore } from '../../store/uiStore';
@@ -21,6 +21,7 @@ const allNavItems = [
   { to: '/members/approvals', icon: ClipboardList, label: 'Approvals', roles: ['SUPER_ADMIN', 'ADMIN', 'SECRETARY'] },
   { to: '/payments', icon: CreditCard, label: 'Payments', roles: '*' },
   { to: '/payments/treasurer', icon: Wallet, label: 'Treasurer', roles: ['SUPER_ADMIN', 'ADMIN', 'TREASURER'] },
+  { to: '/payments/expenses', icon: ArrowUpRight, label: 'Expenses', roles: ['SUPER_ADMIN', 'ADMIN', 'TREASURER'] },
   { to: '/events', icon: Calendar, label: 'Events', roles: '*' },
   { to: '/gallery', icon: Images, label: 'Gallery', roles: '*' },
   { to: '/performance', icon: Trophy, label: 'Performance', roles: '*' },
