@@ -7,15 +7,24 @@ export class BankAccountService {
     const result = await pool.query(`
       SELECT
         ba.*,
-        COALESCE(SUM(p."paidAmount") FILTER (WHERE p.status IN ('PAID','PARTIAL')), 0)::numeric AS "totalIn",
-        COALESCE(SUM(e.amount), 0)::numeric                                                     AS "totalOut",
+        COALESCE((
+          SELECT SUM(p."paidAmount") FROM payments p
+          WHERE p."bankAccountId" = ba.id AND p.status IN ('PAID','PARTIAL')
+        ), 0)::numeric AS "totalIn",
+        COALESCE((
+          SELECT SUM(e.amount) FROM expenses e
+          WHERE e."bankAccountId" = ba.id
+        ), 0)::numeric AS "totalOut",
         (ba."openingBalance"
-          + COALESCE(SUM(p."paidAmount") FILTER (WHERE p.status IN ('PAID','PARTIAL')), 0)
-          - COALESCE(SUM(e.amount), 0))::numeric                                                AS balance
+          + COALESCE((
+              SELECT SUM(p."paidAmount") FROM payments p
+              WHERE p."bankAccountId" = ba.id AND p.status IN ('PAID','PARTIAL')
+            ), 0)
+          - COALESCE((
+              SELECT SUM(e.amount) FROM expenses e
+              WHERE e."bankAccountId" = ba.id
+            ), 0))::numeric AS balance
       FROM bank_accounts ba
-      LEFT JOIN payments p ON p."bankAccountId" = ba.id
-      LEFT JOIN expenses e ON e."bankAccountId" = ba.id
-      GROUP BY ba.id
       ORDER BY ba."createdAt" ASC
     `);
     return result.rows.map((r) => ({

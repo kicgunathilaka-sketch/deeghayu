@@ -61,12 +61,12 @@ export default function ExpensesPage() {
           category: categoryFilter || undefined,
           bankAccountId: accountFilter || undefined,
         })
-        .then((r) => r.data.data),
+        .then((r) => r.data),
   });
 
-  const expenses: any[] = expensesPage?.items ?? [];
-  const total: number = expensesPage?.total ?? 0;
-  const totalPages: number = expensesPage?.totalPages ?? 1;
+  const expenses: any[] = expensesPage?.data ?? [];
+  const total: number = expensesPage?.meta?.total ?? 0;
+  const totalPages: number = expensesPage?.meta?.totalPages ?? 1;
 
   // ── Mutations ──────────────────────────────────────────────────────────────
   const saveMutation = useMutation({
