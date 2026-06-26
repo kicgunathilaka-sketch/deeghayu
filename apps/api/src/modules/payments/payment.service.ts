@@ -203,8 +203,8 @@ export class PaymentService {
     let status = data.status;
     if (!status) {
       if (updatedPaidAmount >= amount) status = 'PAID';
-      else if (isPastDue) status = 'OVERDUE';
       else if (updatedPaidAmount > 0) status = 'PARTIAL';
+      else if (isPastDue) status = 'OVERDUE';
       else status = 'PENDING';
     }
 
@@ -314,7 +314,7 @@ export class PaymentService {
     await pool.query(`
       UPDATE payments
       SET status = 'OVERDUE', "updatedAt" = NOW()
-      WHERE status IN ('PENDING', 'PARTIAL')
+      WHERE status = 'PENDING'
         AND "dueDate" IS NOT NULL
         AND "dueDate" < NOW()
     `);

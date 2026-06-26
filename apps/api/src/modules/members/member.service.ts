@@ -261,10 +261,10 @@ export class MemberService {
       return { arrears: [], totalArrears: 0, monthlyFee: 0 };
     }
 
-    // Sync overdue status before computing arrears
+    // Sync overdue status before computing arrears (only PENDING → OVERDUE; PARTIAL keeps its status)
     await pool.query(`
       UPDATE payments SET status = 'OVERDUE', "updatedAt" = NOW()
-      WHERE "memberId" = $1 AND status IN ('PENDING', 'PARTIAL')
+      WHERE "memberId" = $1 AND status = 'PENDING'
         AND "dueDate" IS NOT NULL AND "dueDate" < NOW()
     `, [memberId]);
 

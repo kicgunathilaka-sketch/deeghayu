@@ -8,8 +8,8 @@ export class BankAccountService {
       SELECT
         ba.*,
         COALESCE((
-          SELECT SUM(p."paidAmount") FROM payments p
-          WHERE p."bankAccountId" = ba.id AND p.status IN ('PAID','PARTIAL')
+          SELECT SUM(pt.amount) FROM payment_transactions pt
+          WHERE pt."bankAccountId" = ba.id
         ), 0)::numeric AS "totalIn",
         COALESCE((
           SELECT SUM(e.amount) FROM expenses e
@@ -17,8 +17,8 @@ export class BankAccountService {
         ), 0)::numeric AS "totalOut",
         (ba."openingBalance"
           + COALESCE((
-              SELECT SUM(p."paidAmount") FROM payments p
-              WHERE p."bankAccountId" = ba.id AND p.status IN ('PAID','PARTIAL')
+              SELECT SUM(pt.amount) FROM payment_transactions pt
+              WHERE pt."bankAccountId" = ba.id
             ), 0)
           - COALESCE((
               SELECT SUM(e.amount) FROM expenses e
