@@ -427,7 +427,7 @@ export default function MemberProfilePage() {
                     </thead>
                     <tbody>
                       {arrearsData.arrears.map((a: any) => {
-                        const rowKey = `${a.year}-${a.month}`;
+                        const rowKey = a.paymentId || `${a.year}-${a.month}`;
                         const isExpanded = expandedArrear === rowKey;
                         const hasTransactions = a.transactions?.length > 0;
                         return (
