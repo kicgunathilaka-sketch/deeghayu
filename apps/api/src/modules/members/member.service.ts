@@ -288,29 +288,6 @@ export class MemberService {
 
     const monthlyFee = settingResult.rows[0] ? Number(settingResult.rows[0].value) : 0;
 
-    // Keep ALL payments per month (multiple manual entries for the same month are allowed)
-    const paymentMap = new Map<string, any[]>();
-    paymentsResult.rows.forEach((p) => {
-      const key = `${p.year}-${p.month}`;
-      if (!paymentMap.has(key)) paymentMap.set(key, []);
-      paymentMap.get(key)!.push(p);
-    });
-
-    const joinDate = new Date(member.dateJoined);
-    let y = joinDate.getFullYear();
-    let m = joinDate.getMonth() + 1;
-
-    const now = new Date();
-    // Extend the loop end to cover any manually added future payments
-    let endYear = now.getFullYear();
-    let endMonth = now.getMonth() + 1;
-    paymentsResult.rows.forEach((p) => {
-      if (p.year > endYear || (p.year === endYear && Number(p.month) > endMonth)) {
-        endYear = p.year;
-        endMonth = Number(p.month);
-      }
-    });
-
     const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     const arrears: Array<{
@@ -320,29 +297,40 @@ export class MemberService {
       transactions: Array<{ id: string; amount: number; createdAt: string; bankName: string | null }>;
     }> = [];
 
-    while (y < endYear || (y === endYear && m <= endMonth)) {
-      const payments = paymentMap.get(`${y}-${m}`) || [];
+    // Step 1: Add every non-PAID payment record regardless of month range
+    const coveredKeys = new Set<string>();
+    for (const p of paymentsResult.rows) {
+      const key = `${p.year}-${Number(p.month)}`;
+      coveredKeys.add(key);
+      if (p.status === 'PARTIAL') {
+        const balance = Number(p.amount) - Number(p.paidAmount);
+        if (balance > 0) {
+          arrears.push({ year: Number(p.year), month: Number(p.month), monthName: MONTH_NAMES[Number(p.month) - 1], amount: Number(p.amount), paidAmount: Number(p.paidAmount), balance, status: 'PARTIAL', paymentId: p.id, dueDate: p.dueDate, transactions: [] });
+        }
+      } else if (p.status === 'PENDING' || p.status === 'OVERDUE') {
+        arrears.push({ year: Number(p.year), month: Number(p.month), monthName: MONTH_NAMES[Number(p.month) - 1], amount: Number(p.amount), paidAmount: Number(p.paidAmount), balance: Number(p.amount) - Number(p.paidAmount), status: p.status, paymentId: p.id, dueDate: p.dueDate, transactions: [] });
+      }
+    }
 
-      if (payments.length === 0) {
-        if (monthlyFee > 0) {
+    // Step 2: Fill UNPAID gaps for months within the membership period that have no record at all
+    if (monthlyFee > 0) {
+      const now = new Date();
+      const joinDate = new Date(member.dateJoined);
+      let y = joinDate.getFullYear();
+      let m = joinDate.getMonth() + 1;
+      const endYear = now.getFullYear();
+      const endMonth = now.getMonth() + 1;
+      while (y < endYear || (y === endYear && m <= endMonth)) {
+        if (!coveredKeys.has(`${y}-${m}`)) {
           arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: monthlyFee, paidAmount: 0, balance: monthlyFee, status: 'UNPAID', paymentId: null, dueDate: null, transactions: [] });
         }
-      } else {
-        for (const payment of payments) {
-          if (payment.status === 'PARTIAL') {
-            const balance = Number(payment.amount) - Number(payment.paidAmount);
-            if (balance > 0) {
-              arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: Number(payment.amount), paidAmount: Number(payment.paidAmount), balance, status: 'PARTIAL', paymentId: payment.id, dueDate: payment.dueDate, transactions: [] });
-            }
-          } else if (payment.status === 'PENDING' || payment.status === 'OVERDUE') {
-            arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: Number(payment.amount), paidAmount: Number(payment.paidAmount), balance: Number(payment.amount) - Number(payment.paidAmount), status: payment.status, paymentId: payment.id, dueDate: payment.dueDate, transactions: [] });
-          }
-        }
+        m++;
+        if (m > 12) { m = 1; y++; }
       }
-
-      m++;
-      if (m > 12) { m = 1; y++; }
     }
+
+    // Sort chronologically
+    arrears.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 
     // Attach individual payment transactions to each arrear row
     const paymentIds = arrears.map((a) => a.paymentId).filter(Boolean) as string[];
