@@ -361,6 +361,16 @@ CREATE TABLE vote_responses (
 CREATE INDEX idx_vote_responses_voteId ON vote_responses("voteId");
 CREATE INDEX idx_vote_responses_memberId ON vote_responses("memberId");
 
+CREATE TABLE push_subscriptions (
+  id         TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  "userId"   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint   TEXT NOT NULL UNIQUE,
+  p256dh     TEXT NOT NULL,
+  auth       TEXT NOT NULL,
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_push_subs_userId ON push_subscriptions("userId");
+
 -- ── SEED DATA ─────────────────────────────────────────────────
 INSERT INTO system_settings (id, key, value) VALUES
   (gen_random_uuid()::text, 'monthly_fee', '0'),

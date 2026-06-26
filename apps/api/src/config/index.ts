@@ -26,6 +26,12 @@ export const config = {
 
   uploadPath: process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads'),
 
+  vapid: {
+    publicKey: process.env.VAPID_PUBLIC_KEY || '',
+    privateKey: process.env.VAPID_PRIVATE_KEY || '',
+    subject: `mailto:${process.env.SMTP_USER || 'admin@deeghayu.org'}`,
+  },
+
   isProduction: process.env.NODE_ENV === 'production',
   isDevelopment: process.env.NODE_ENV === 'development',
 } as const;

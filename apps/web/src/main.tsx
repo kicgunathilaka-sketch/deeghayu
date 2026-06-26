@@ -4,6 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import App from './App';
 import './index.css';
+import { registerServiceWorker } from './utils/pwa';
+
+registerServiceWorker();
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -3,6 +3,7 @@ import { pool } from '../../config/database';
 import { NotificationType } from '../../types';
 import { sendMail } from '../../utils/mailer';
 import { config } from '../../config';
+import { sendPushToUser, sendPushToAll } from '../../utils/pushNotification';
 
 export class NotificationService {
   async getForUser(userId: string) {
@@ -73,6 +74,12 @@ export class NotificationService {
       );
     }
 
+    // Push notification to all matched users
+    sendPushToAll(
+      { title: data.title, body: data.body, url: data.link },
+      users.map((u) => u.id)
+    ).catch(() => {});
+
     return { sent: users.length };
   }
 
@@ -82,6 +89,8 @@ export class NotificationService {
        VALUES ($1, $2, $3, $4, 'IN_APP', $5, false, NOW()) RETURNING *`,
       [uuidv4(), userId, title, body, link || null]
     );
+    // Also send as push notification
+    sendPushToUser(userId, { title, body, url: link }).catch(() => {});
     return result.rows[0];
   }
 }

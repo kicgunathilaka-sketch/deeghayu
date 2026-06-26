@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Phone, MapPin, CreditCard, Calendar, Shield, AlertTriangle, Pencil, Camera, X, Check, Sun, Moon, Bell, PenLine, Plus, DollarSign } from 'lucide-react';
@@ -16,6 +16,7 @@ import { PageLoader } from '../../components/ui/Spinner';
 import { formatDate, formatCurrency, formatRole } from '../../utils/formatters';
 import { uploadImage } from '../../utils/uploadImage';
 import { resolveMediaUrl } from '../../utils/media';
+import { subscribeToPush, unsubscribeFromPush, isPushSubscribed, isPushSupported } from '../../utils/pwa';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 
@@ -38,6 +39,14 @@ export default function MemberProfilePage() {
   const [editMode, setEditMode] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [showSigPad, setShowSigPad] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [togglingPush, setTogglingPush] = useState(false);
+  const pushSupported = isPushSupported();
+
+  // Check push subscription status on mount
+  useEffect(() => {
+    if (isOwnProfile) isPushSubscribed().then(setPushEnabled);
+  }, [isOwnProfile]);
 
   // Arrear management
   const [expandedArrear, setExpandedArrear] = useState<string | null>(null); // "year-month" key
@@ -798,26 +807,55 @@ export default function MemberProfilePage() {
             </div>
           )}
 
-          {/* Notification Preferences — only on own profile */}
-          {isOwnProfile && (
+          {/* Push Notifications — only on own profile */}
+          {isOwnProfile && pushSupported && (
             <div className="card p-5">
-              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center gap-2">
-                <Bell size={16} /> Notification Preferences
+              <h3 className="font-semibold text-slate-900 dark:text-slate-100 mb-1 flex items-center gap-2">
+                <Bell size={16} /> Push Notifications
               </h3>
-              <div className="space-y-4">
-                {[
-                  { label: 'Payment reminders', desc: 'Get notified when a payment is due' },
-                  { label: 'Event reminders', desc: 'Get notified about upcoming events' },
-                  { label: 'Announcements', desc: 'Receive community announcements' },
-                ].map(({ label, desc }) => (
-                  <div key={label} className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{label}</p>
-                      <p className="text-xs text-slate-400">{desc}</p>
-                    </div>
-                    <input type="checkbox" defaultChecked className="w-4 h-4 accent-primary-600" />
-                  </div>
-                ))}
+              <p className="text-xs text-slate-400 mb-4">
+                Receive notifications even when you're not on the page.
+                {typeof window !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent) && !('standalone' in navigator && (navigator as any).standalone) && (
+                  <span className="block mt-1 text-amber-500">On iPhone: add this app to your Home Screen first, then enable notifications.</span>
+                )}
+              </p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    {pushEnabled ? 'Notifications enabled' : 'Notifications disabled'}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {pushEnabled ? 'You will receive push notifications.' : 'Enable to get notified about payments, events & announcements.'}
+                  </p>
+                </div>
+                <button
+                  disabled={togglingPush}
+                  onClick={async () => {
+                    setTogglingPush(true);
+                    try {
+                      if (pushEnabled) {
+                        await unsubscribeFromPush();
+                        setPushEnabled(false);
+                        toast.success('Push notifications disabled');
+                      } else {
+                        const ok = await subscribeToPush();
+                        if (ok) {
+                          setPushEnabled(true);
+                          toast.success('Push notifications enabled!');
+                        } else {
+                          toast.error('Could not enable notifications. Check browser permissions.');
+                        }
+                      }
+                    } finally {
+                      setTogglingPush(false);
+                    }
+                  }}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                    pushEnabled ? 'bg-primary-600' : 'bg-slate-300 dark:bg-slate-600'
+                  } ${togglingPush ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${pushEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                </button>
               </div>
             </div>
           )}
