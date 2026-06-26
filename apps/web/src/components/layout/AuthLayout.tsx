@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import logo from '../../assets/logo.png';
 
 export default function AuthLayout() {
   return (
@@ -11,8 +12,8 @@ export default function AuthLayout() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center mb-8"
         >
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white/10 backdrop-blur rounded-2xl mb-4">
-            <span className="text-3xl">🌿</span>
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-white/10 backdrop-blur rounded-2xl mb-4 p-1">
+            <img src={logo} alt="Deeghayu" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-3xl font-bold text-white">Deeghayu</h1>
           <p className="text-primary-200 mt-1">Community Management</p>
