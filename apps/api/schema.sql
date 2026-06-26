@@ -364,6 +364,7 @@ CREATE INDEX idx_vote_responses_memberId ON vote_responses("memberId");
 -- ── SEED DATA ─────────────────────────────────────────────────
 INSERT INTO system_settings (id, key, value) VALUES
   (gen_random_uuid()::text, 'monthly_fee', '0'),
+  (gen_random_uuid()::text, 'joining_fee', '0'),
   (gen_random_uuid()::text, 'app_name', 'Deeghayu Community')
 ON CONFLICT (key) DO NOTHING;
 
