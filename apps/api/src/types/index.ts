@@ -78,3 +78,16 @@ export const RsvpResponse = {
   MAYBE: 'MAYBE',
 } as const;
 export type RsvpResponse = (typeof RsvpResponse)[keyof typeof RsvpResponse];
+
+export const VoteType = {
+  ANONYMOUS: 'ANONYMOUS',
+  PUBLIC: 'PUBLIC',
+} as const;
+export type VoteType = (typeof VoteType)[keyof typeof VoteType];
+
+export const VoteStatus = {
+  DRAFT: 'DRAFT',
+  ACTIVE: 'ACTIVE',
+  CLOSED: 'CLOSED',
+} as const;
+export type VoteStatus = (typeof VoteStatus)[keyof typeof VoteStatus];

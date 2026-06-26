@@ -25,6 +25,7 @@ import bankAccountRoutes from './modules/bank-accounts/bank-account.routes';
 import expenseRoutes from './modules/expenses/expense.routes';
 import documentRoutes from './modules/documents/document.routes';
 import performanceRoutes from './modules/performance/performance.routes';
+import voteRoutes from './modules/votes/vote.routes';
 
 const app = express();
 
@@ -101,6 +102,7 @@ app.use(`${API_PREFIX}/bank-accounts`, bankAccountRoutes);
 app.use(`${API_PREFIX}/expenses`, expenseRoutes);
 app.use(`${API_PREFIX}/documents`, documentRoutes);
 app.use(`${API_PREFIX}/performance`, performanceRoutes);
+app.use(`${API_PREFIX}/votes`, voteRoutes);
 
 // 404
 app.use((_req, res) => {

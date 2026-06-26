@@ -50,6 +50,9 @@ import DocumentsPage from '../pages/documents/DocumentsPage';
 // Performance
 import PerformancePage from '../pages/performance/PerformancePage';
 
+// Votes
+import VotesPage from '../pages/votes/VotesPage';
+
 // Settings
 import SettingsPage from '../pages/settings/SettingsPage';
 
@@ -129,6 +132,9 @@ export default function AppRouter() {
 
         {/* Documents */}
         <Route path="/documents" element={<AdminRoute><DocumentsPage /></AdminRoute>} />
+
+        {/* Votes */}
+        <Route path="/votes" element={<PrivateRoute><VotesPage /></PrivateRoute>} />
 
         {/* Settings */}
         <Route path="/settings" element={<SettingsPage />} />
