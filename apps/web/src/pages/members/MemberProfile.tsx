@@ -139,6 +139,28 @@ export default function MemberProfilePage() {
     onError: () => toast.error('Failed to record payment'),
   });
 
+  // Mark joining fee as already paid (historical, no bank account needed)
+  const markJoiningFeePaidMutation = useMutation({
+    mutationFn: async (arrear: any) => {
+      if (arrear.paymentId) {
+        const remaining = arrear.balance;
+        return paymentsApi.update(arrear.paymentId, { paidAmount: remaining });
+      } else {
+        return paymentsApi.create({
+          memberId: memberId!,
+          type: 'JOINING_FEE',
+          amount: arrear.amount,
+          paidAmount: arrear.amount,
+        });
+      }
+    },
+    onSuccess: () => {
+      invalidateArrears();
+      toast.success('Joining fee marked as paid');
+    },
+    onError: () => toast.error('Failed to update joining fee'),
+  });
+
   // Manually add a new arrear record
   const addArrearMutation = useMutation({
     mutationFn: (form: typeof addArrearForm) =>
@@ -512,16 +534,27 @@ export default function MemberProfilePage() {
                                   </select>
                                 </div>
                               ) : (
-                                <button
-                                  onClick={() => {
-                                    setCollectingArrear(a);
-                                    setCollectAmount(String(a.balance));
-                                    setCollectBankAccountId(bankAccounts?.length === 1 ? bankAccounts[0].id : '');
-                                  }}
-                                  className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 whitespace-nowrap"
-                                >
-                                  <DollarSign size={12} /> Collect
-                                </button>
+                                <div className="flex flex-col gap-1">
+                                  {a.isJoiningFee && (
+                                    <button
+                                      onClick={() => markJoiningFeePaidMutation.mutate(a)}
+                                      disabled={markJoiningFeePaidMutation.isPending}
+                                      className="flex items-center gap-1 text-xs font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 whitespace-nowrap disabled:opacity-40"
+                                    >
+                                      <Check size={12} /> Mark Paid
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      setCollectingArrear(a);
+                                      setCollectAmount(String(a.balance));
+                                      setCollectBankAccountId(bankAccounts?.length === 1 ? bankAccounts[0].id : '');
+                                    }}
+                                    className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 whitespace-nowrap"
+                                  >
+                                    <DollarSign size={12} /> Collect
+                                  </button>
+                                </div>
                               )}
                             </td>
                           )}
