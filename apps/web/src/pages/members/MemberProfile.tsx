@@ -139,18 +139,18 @@ export default function MemberProfilePage() {
     onError: () => toast.error('Failed to record payment'),
   });
 
-  // Mark joining fee as already paid (historical, no bank account needed)
+  // Mark joining fee as already paid (historical — no bank transaction recorded)
   const markJoiningFeePaidMutation = useMutation({
     mutationFn: async (arrear: any) => {
       if (arrear.paymentId) {
-        const remaining = arrear.balance;
-        return paymentsApi.update(arrear.paymentId, { paidAmount: remaining });
+        return paymentsApi.update(arrear.paymentId, { paidAmount: arrear.balance, noTransaction: true });
       } else {
         return paymentsApi.create({
           memberId: memberId!,
           type: 'JOINING_FEE',
           amount: arrear.amount,
           paidAmount: arrear.amount,
+          noTransaction: true,
         });
       }
     },

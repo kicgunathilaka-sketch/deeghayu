@@ -107,6 +107,7 @@ export class PaymentService {
     description?: string;
     bankAccountId?: string;
     recordedBy: string;
+    noTransaction?: boolean;
   }) {
     const memberCheck = await pool.query('SELECT id FROM members WHERE id = $1', [data.memberId]);
     if (!memberCheck.rows[0]) throw new NotFoundError('Member not found');
@@ -168,7 +169,7 @@ export class PaymentService {
       ]
     );
 
-    if (paidAmount > 0) {
+    if (paidAmount > 0 && !data.noTransaction) {
       await pool.query(
         `INSERT INTO payment_transactions (id, "paymentId", "memberId", amount, "bankAccountId", "recordedBy", "createdAt")
          VALUES ($1,$2,$3,$4,$5,$6,NOW())`,
@@ -187,6 +188,7 @@ export class PaymentService {
       bankAccountId: string;
       description: string;
       recordedBy: string;
+      noTransaction: boolean;
     }>
   ) {
     const existing = await pool.query('SELECT * FROM payments WHERE id = $1', [id]);
@@ -224,7 +226,7 @@ export class PaymentService {
       [status, updatedPaidAmount, bankAccountId, data.description || null, id, status]
     );
 
-    if (additional > 0) {
+    if (additional > 0 && !data.noTransaction) {
       const recordedBy = data.recordedBy || payment.recordedBy;
       await pool.query(
         `INSERT INTO payment_transactions (id, "paymentId", "memberId", amount, "bankAccountId", "recordedBy", "createdAt")
