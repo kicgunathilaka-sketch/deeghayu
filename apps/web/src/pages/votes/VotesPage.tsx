@@ -57,7 +57,7 @@ function ProgressBar({ value, max, color = 'primary' }: { value: number; max: nu
 function VoteDetailModal({ voteId, onClose, canManage }: { voteId: string; onClose: () => void; canManage: boolean }) {
   const qc = useQueryClient();
   const { user } = useAuthStore();
-  const hasMember = !!user?.member;
+  const hasMember = !!(user?.member || user?.memberId);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
 
   const { data: res, isLoading } = useQuery({
