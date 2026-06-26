@@ -120,9 +120,8 @@ export default function MemberProfilePage() {
         // No record yet (UNPAID) — create it with this payment
         return paymentsApi.create({
           memberId: memberId!,
-          type: 'MONTHLY_MEETING',
-          month: arrear.month,
-          year: arrear.year,
+          type: arrear.isJoiningFee ? 'JOINING_FEE' : 'MONTHLY_MEETING',
+          ...(arrear.isJoiningFee ? {} : { month: arrear.month, year: arrear.year }),
           amount: arrear.amount,
           paidAmount: amount,
           bankAccountId: bankId,
@@ -443,7 +442,7 @@ export default function MemberProfilePage() {
                                   <span className="text-xs">{isExpanded ? '▾' : '▸'}</span>
                                 </button>
                               )}
-                              {a.monthName} {a.year}
+                              {a.isJoiningFee ? 'Joining Fee' : `${a.monthName} ${a.year}`}
                             </div>
                             {isExpanded && hasTransactions && (
                               <div className="mt-1.5 ml-4 space-y-1">

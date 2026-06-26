@@ -62,7 +62,7 @@ export default function PaymentsPage() {
         {isAdmin && (
           <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="input w-44">
             <option value="">All Types</option>
-            {['MONTHLY_MEETING', 'SPECIAL_MEETING', 'COMMUNITY_EVENT', 'VOLUNTEER_EVENT', 'RELIGIOUS_EVENT', 'OTHER', 'CUSTOM'].map((t) => (
+            {['MONTHLY_MEETING', 'JOINING_FEE', 'SPECIAL_MEETING', 'COMMUNITY_EVENT', 'VOLUNTEER_EVENT', 'RELIGIOUS_EVENT', 'OTHER', 'CUSTOM'].map((t) => (
               <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>
             ))}
           </select>

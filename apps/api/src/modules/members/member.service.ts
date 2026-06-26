@@ -277,23 +277,31 @@ export class MemberService {
         )
     `, [memberId]);
 
-    const [settingResult, paymentsResult] = await Promise.all([
+    const [settingResult, joiningFeeSettingResult, paymentsResult, joiningFeeResult] = await Promise.all([
       pool.query("SELECT value FROM system_settings WHERE key = 'monthly_fee'"),
+      pool.query("SELECT value FROM system_settings WHERE key = 'joining_fee'"),
       pool.query(
         `SELECT id, month, year, status, amount, "paidAmount", "dueDate" FROM payments
          WHERE "memberId" = $1 AND type = 'MONTHLY_MEETING'`,
         [memberId]
       ),
+      pool.query(
+        `SELECT id, status, amount, "paidAmount", "dueDate" FROM payments
+         WHERE "memberId" = $1 AND type = 'JOINING_FEE'
+         ORDER BY "createdAt" DESC LIMIT 1`,
+        [memberId]
+      ),
     ]);
 
     const monthlyFee = settingResult.rows[0] ? Number(settingResult.rows[0].value) : 0;
+    const joiningFeeAmount = joiningFeeSettingResult.rows[0] ? Number(joiningFeeSettingResult.rows[0].value) : 0;
 
     const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     const arrears: Array<{
       year: number; month: number; monthName: string;
       amount: number; paidAmount: number; balance: number; status: string;
-      paymentId: string | null; dueDate: string | null;
+      paymentId: string | null; dueDate: string | null; isJoiningFee?: boolean;
       transactions: Array<{ id: string; amount: number; createdAt: string; bankName: string | null }>;
     }> = [];
 
@@ -332,6 +340,19 @@ export class MemberService {
     // Sort chronologically
     arrears.sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 
+    // Prepend joining fee arrear if configured and not fully paid
+    if (joiningFeeAmount > 0) {
+      const jf = joiningFeeResult.rows[0];
+      if (!jf) {
+        arrears.unshift({ year: 0, month: 0, monthName: 'Joining Fee', amount: joiningFeeAmount, paidAmount: 0, balance: joiningFeeAmount, status: 'UNPAID', paymentId: null, dueDate: null, isJoiningFee: true, transactions: [] });
+      } else if (jf.status !== 'PAID') {
+        const balance = Number(jf.amount) - Number(jf.paidAmount);
+        if (balance > 0) {
+          arrears.unshift({ year: 0, month: 0, monthName: 'Joining Fee', amount: Number(jf.amount), paidAmount: Number(jf.paidAmount), balance, status: jf.status, paymentId: jf.id, dueDate: jf.dueDate, isJoiningFee: true, transactions: [] });
+        }
+      }
+    }
+
     // Attach individual payment transactions to each arrear row
     const paymentIds = arrears.map((a) => a.paymentId).filter(Boolean) as string[];
     if (paymentIds.length > 0) {
@@ -353,7 +374,7 @@ export class MemberService {
       });
     }
 
-    return { arrears, totalArrears: arrears.reduce((s, a) => s + a.balance, 0), monthlyFee };
+    return { arrears, totalArrears: arrears.reduce((s, a) => s + a.balance, 0), monthlyFee, joiningFeeAmount };
   }
 
   async exportMembers(fmt: 'pdf' | 'excel' | 'csv', filters: any) {

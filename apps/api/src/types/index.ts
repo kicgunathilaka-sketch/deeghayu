@@ -21,6 +21,7 @@ export type MemberStatus = (typeof MemberStatus)[keyof typeof MemberStatus];
 
 export const PaymentType = {
   MONTHLY_MEETING: 'MONTHLY_MEETING',
+  JOINING_FEE: 'JOINING_FEE',
   SPECIAL_MEETING: 'SPECIAL_MEETING',
   COMMUNITY_EVENT: 'COMMUNITY_EVENT',
   VOLUNTEER_EVENT: 'VOLUNTEER_EVENT',
