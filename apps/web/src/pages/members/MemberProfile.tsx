@@ -30,6 +30,7 @@ export default function MemberProfilePage() {
   const memberId = paramId || user?.memberId;
   const isOwnProfile = !paramId || paramId === user?.memberId;
   const isAdmin = ['SUPER_ADMIN', 'ADMIN', 'SECRETARY'].includes(user?.role || '');
+  const canCollect = ['SUPER_ADMIN', 'ADMIN', 'SECRETARY', 'TREASURER', 'PRESIDENT'].includes(user?.role || '');
   const canEdit = isOwnProfile || isAdmin;
   const { theme, toggleTheme } = useUiStore();
 
@@ -75,7 +76,7 @@ export default function MemberProfilePage() {
     queryKey: ['bank-accounts'],
     queryFn: () => bankAccountsApi.getAll().then((r) => r.data.data as any[]),
     staleTime: 60_000,
-    enabled: isAdmin,
+    enabled: canCollect,
   });
 
   const { register, handleSubmit, reset } = useForm();
@@ -421,7 +422,7 @@ export default function MemberProfilePage() {
                         <th className="text-right text-xs font-semibold text-slate-500 uppercase pb-2">Paid</th>
                         <th className="text-right text-xs font-semibold text-slate-500 uppercase pb-2">Balance</th>
                         <th className="text-center text-xs font-semibold text-slate-500 uppercase pb-2">Status</th>
-                        {isAdmin && <th className="pb-2" />}
+                        {canCollect && <th className="text-left text-xs font-semibold text-slate-500 uppercase pb-2 pl-3">Collect</th>}
                       </tr>
                     </thead>
                     <tbody>
@@ -466,8 +467,8 @@ export default function MemberProfilePage() {
                               'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
                             }`}>{a.status}</span>
                           </td>
-                          {isAdmin && (
-                            <td className="py-2 pl-3">
+                          {canCollect && (
+                            <td className="py-2 pl-3 min-w-[200px]">
                               {collectingArrear?.month === a.month && collectingArrear?.year === a.year ? (
                                 <div className="flex flex-col gap-1.5">
                                   <div className="flex items-center gap-1">
@@ -476,10 +477,10 @@ export default function MemberProfilePage() {
                                       min="0.01"
                                       step="0.01"
                                       max={a.balance}
-                                      placeholder={`Max ${formatCurrency(a.balance)}`}
+                                      placeholder={`Amount (max ${formatCurrency(a.balance)})`}
                                       value={collectAmount}
                                       onChange={(e) => setCollectAmount(e.target.value)}
-                                      className="input py-1 px-2 text-xs w-28"
+                                      className="input py-1 px-2 text-xs w-36"
                                       autoFocus
                                     />
                                     <button
@@ -500,30 +501,23 @@ export default function MemberProfilePage() {
                                       <X size={12} />
                                     </button>
                                   </div>
-                                  {bankAccounts && bankAccounts.length > 1 && (
-                                    <select
-                                      value={collectBankAccountId}
-                                      onChange={(e) => setCollectBankAccountId(e.target.value)}
-                                      className="input py-1 px-2 text-xs"
-                                    >
-                                      <option value="">No bank account</option>
-                                      {bankAccounts.map((acc: any) => (
-                                        <option key={acc.id} value={acc.id}>{acc.name}</option>
-                                      ))}
-                                    </select>
-                                  )}
-                                  {bankAccounts && bankAccounts.length === 1 && (
-                                    <p className="text-xs text-slate-400">→ {bankAccounts[0].name}</p>
-                                  )}
+                                  <select
+                                    value={collectBankAccountId}
+                                    onChange={(e) => setCollectBankAccountId(e.target.value)}
+                                    className="input py-1 px-2 text-xs"
+                                  >
+                                    <option value="">No bank account</option>
+                                    {(bankAccounts || []).map((acc: any) => (
+                                      <option key={acc.id} value={acc.id}>{acc.name}</option>
+                                    ))}
+                                  </select>
                                 </div>
                               ) : (
                                 <button
                                   onClick={() => {
                                     setCollectingArrear(a);
-                                    setCollectAmount('');
-                                    // Auto-select if exactly one account
-                                    if (bankAccounts?.length === 1) setCollectBankAccountId(bankAccounts[0].id);
-                                    else setCollectBankAccountId('');
+                                    setCollectAmount(String(a.balance));
+                                    setCollectBankAccountId(bankAccounts?.length === 1 ? bankAccounts[0].id : '');
                                   }}
                                   className="flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 whitespace-nowrap"
                                 >
