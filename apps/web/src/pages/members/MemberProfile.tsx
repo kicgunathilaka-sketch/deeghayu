@@ -38,6 +38,7 @@ export default function MemberProfilePage() {
   const [showSigPad, setShowSigPad] = useState(false);
 
   // Arrear management
+  const [expandedArrear, setExpandedArrear] = useState<string | null>(null); // "year-month" key
   const [collectingArrear, setCollectingArrear] = useState<any | null>(null); // arrear row being paid
   const [collectAmount, setCollectAmount] = useState('');
   const [collectBankAccountId, setCollectBankAccountId] = useState<string>('');
@@ -423,10 +424,38 @@ export default function MemberProfilePage() {
                         {isAdmin && <th className="pb-2" />}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-surface-100 dark:divide-surface-700">
-                      {arrearsData.arrears.map((a: any) => (
-                        <tr key={`${a.year}-${a.month}`}>
-                          <td className="py-2 font-medium text-slate-900 dark:text-slate-100">{a.monthName} {a.year}</td>
+                    <tbody>
+                      {arrearsData.arrears.map((a: any) => {
+                        const rowKey = `${a.year}-${a.month}`;
+                        const isExpanded = expandedArrear === rowKey;
+                        const hasTransactions = a.transactions?.length > 0;
+                        return (
+                        <tr key={rowKey} className="border-b border-surface-100 dark:border-surface-700">
+                          <td className="py-2 font-medium text-slate-900 dark:text-slate-100">
+                            <div className="flex items-center gap-1">
+                              {hasTransactions && (
+                                <button
+                                  onClick={() => setExpandedArrear(isExpanded ? null : rowKey)}
+                                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                  title="Show payment history"
+                                >
+                                  <span className="text-xs">{isExpanded ? '▾' : '▸'}</span>
+                                </button>
+                              )}
+                              {a.monthName} {a.year}
+                            </div>
+                            {isExpanded && hasTransactions && (
+                              <div className="mt-1.5 ml-4 space-y-1">
+                                {a.transactions.map((tx: any) => (
+                                  <div key={tx.id} className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                                    <span className="text-emerald-600 dark:text-emerald-400 font-medium">+{formatCurrency(tx.amount)}</span>
+                                    <span>{formatDate(tx.createdAt)}</span>
+                                    {tx.bankName && <span className="text-slate-400">→ {tx.bankName}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </td>
                           <td className="py-2 text-right text-slate-600 dark:text-slate-300">{formatCurrency(a.amount)}</td>
                           <td className="py-2 text-right text-slate-600 dark:text-slate-300">{formatCurrency(a.paidAmount)}</td>
                           <td className="py-2 text-right font-semibold text-red-600 dark:text-red-400">{formatCurrency(a.balance)}</td>
@@ -504,7 +533,8 @@ export default function MemberProfilePage() {
                             </td>
                           )}
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

@@ -298,6 +298,7 @@ export class MemberService {
       year: number; month: number; monthName: string;
       amount: number; paidAmount: number; balance: number; status: string;
       paymentId: string | null; dueDate: string | null;
+      transactions: Array<{ id: string; amount: number; createdAt: string; bankName: string | null }>;
     }> = [];
 
     while (y < endYear || (y === endYear && m <= endMonth)) {
@@ -305,19 +306,40 @@ export class MemberService {
 
       if (!payment) {
         if (monthlyFee > 0) {
-          arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: monthlyFee, paidAmount: 0, balance: monthlyFee, status: 'UNPAID', paymentId: null, dueDate: null });
+          arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: monthlyFee, paidAmount: 0, balance: monthlyFee, status: 'UNPAID', paymentId: null, dueDate: null, transactions: [] });
         }
       } else if (payment.status === 'PARTIAL') {
         const balance = Number(payment.amount) - Number(payment.paidAmount);
         if (balance > 0) {
-          arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: Number(payment.amount), paidAmount: Number(payment.paidAmount), balance, status: 'PARTIAL', paymentId: payment.id, dueDate: payment.dueDate });
+          arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: Number(payment.amount), paidAmount: Number(payment.paidAmount), balance, status: 'PARTIAL', paymentId: payment.id, dueDate: payment.dueDate, transactions: [] });
         }
       } else if (payment.status === 'PENDING' || payment.status === 'OVERDUE') {
-        arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: Number(payment.amount), paidAmount: Number(payment.paidAmount), balance: Number(payment.amount) - Number(payment.paidAmount), status: payment.status, paymentId: payment.id, dueDate: payment.dueDate });
+        arrears.push({ year: y, month: m, monthName: MONTH_NAMES[m - 1], amount: Number(payment.amount), paidAmount: Number(payment.paidAmount), balance: Number(payment.amount) - Number(payment.paidAmount), status: payment.status, paymentId: payment.id, dueDate: payment.dueDate, transactions: [] });
       }
 
       m++;
       if (m > 12) { m = 1; y++; }
+    }
+
+    // Attach individual payment transactions to each arrear row
+    const paymentIds = arrears.map((a) => a.paymentId).filter(Boolean) as string[];
+    if (paymentIds.length > 0) {
+      const txResult = await pool.query(
+        `SELECT pt.id, pt."paymentId", pt.amount, pt."createdAt", ba.name AS "bankName"
+         FROM payment_transactions pt
+         LEFT JOIN bank_accounts ba ON ba.id = pt."bankAccountId"
+         WHERE pt."paymentId" = ANY($1::text[])
+         ORDER BY pt."createdAt" ASC`,
+        [paymentIds]
+      );
+      const txMap = new Map<string, any[]>();
+      txResult.rows.forEach((tx) => {
+        if (!txMap.has(tx.paymentId)) txMap.set(tx.paymentId, []);
+        txMap.get(tx.paymentId)!.push({ id: tx.id, amount: Number(tx.amount), createdAt: tx.createdAt, bankName: tx.bankName });
+      });
+      arrears.forEach((a) => {
+        if (a.paymentId) a.transactions = txMap.get(a.paymentId) || [];
+      });
     }
 
     return { arrears, totalArrears: arrears.reduce((s, a) => s + a.balance, 0), monthlyFee };
