@@ -10,6 +10,7 @@ router.use(authenticate);
 
 router.get('/dashboard/stats', reportController.getDashboardStats);
 router.get('/finance', authorizeMinRole(Role.TREASURER), reportController.getFinancialReport);
+router.get('/monthly', authorizeMinRole(Role.TREASURER), reportController.getMonthlyReport);
 router.get('/export', authorizeMinRole(Role.SECRETARY), reportController.exportReport);
 
 export default router;

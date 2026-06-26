@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { DollarSign, AlertTriangle, Plus, Send, CalendarClock, ChevronRight, Landmark, ArrowDownLeft, ArrowUpRight, List, X } from 'lucide-react';
+import { DollarSign, AlertTriangle, Plus, Send, CalendarClock, ChevronRight, Landmark, ArrowDownLeft, ArrowUpRight, List, X, FileDown } from 'lucide-react';
 import { paymentsApi } from '../../api/payments.api';
 import { paymentEventsApi } from '../../api/paymentEvents.api';
 import { membersApi } from '../../api/members.api';
 import { bankAccountsApi } from '../../api/bankAccounts.api';
+import { reportsApi } from '../../api/reports.api';
+import { downloadBlob } from '../../utils/formatters';
 import { Button } from '../../components/ui/Button';
 import { StatCard } from '../../components/ui/StatCard';
 import { StatusBadge } from '../../components/ui/Badge';
@@ -29,6 +31,22 @@ export default function TreasurerDashboardPage() {
   const [selectedOverdue, setSelectedOverdue] = useState<string[]>([]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [txAccountId, setTxAccountId] = useState<string | null>(null);
+  const [reportMonth, setReportMonth] = useState(month);
+  const [reportYear, setReportYear] = useState(year);
+  const [downloadingReport, setDownloadingReport] = useState(false);
+
+  const handleDownloadMonthlyReport = async () => {
+    setDownloadingReport(true);
+    try {
+      const res = await reportsApi.getMonthlyReport(reportYear, reportMonth);
+      const monthName = ['January','February','March','April','May','June','July','August','September','October','November','December'][reportMonth - 1];
+      downloadBlob(res.data, `financial-report-${monthName}-${reportYear}.pdf`);
+    } catch {
+      toast.error('Failed to generate report');
+    } finally {
+      setDownloadingReport(false);
+    }
+  };
 
   // ── Queries ──────────────────────────────────────────────────────────────
   const { data: summary } = useQuery({
@@ -248,6 +266,50 @@ export default function TreasurerDashboardPage() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Monthly Financial Report */}
+      <div className="card p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <FileDown size={16} className="text-slate-400" />
+          <h2 className="font-semibold text-slate-900 dark:text-slate-100">Monthly Financial Report</h2>
+        </div>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+          Download a PDF summary of income (by type), expenses, and bank balance for any month.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="label">Month</label>
+            <select
+              className="input w-36"
+              value={reportMonth}
+              onChange={(e) => setReportMonth(Number(e.target.value))}
+            >
+              {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
+                <option key={i + 1} value={i + 1}>{m}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="label">Year</label>
+            <select
+              className="input w-28"
+              value={reportYear}
+              onChange={(e) => setReportYear(Number(e.target.value))}
+            >
+              {Array.from({ length: 5 }, (_, i) => year - i).map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+          <Button
+            icon={<FileDown size={15} />}
+            loading={downloadingReport}
+            onClick={handleDownloadMonthlyReport}
+          >
+            Download PDF
+          </Button>
+        </div>
       </div>
 
       {/* Bank Account Transactions Modal */}

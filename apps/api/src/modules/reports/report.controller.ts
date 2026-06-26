@@ -14,6 +14,16 @@ export const getFinancialReport = async (req: Request, res: Response) => {
   res.json({ success: true, data: result });
 };
 
+export const getMonthlyReport = async (req: Request, res: Response) => {
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const month = Number(req.query.month) || new Date().getMonth() + 1;
+  const buffer = await reportService.getMonthlyReport(year, month);
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="financial-report-${months[month-1]}-${year}.pdf"`);
+  res.send(buffer);
+};
+
 export const exportReport = async (req: Request, res: Response) => {
   const { type, format } = req.query as { type: any; format: any };
   const buffer = await reportService.exportReport(type, format || 'excel', req.query);
