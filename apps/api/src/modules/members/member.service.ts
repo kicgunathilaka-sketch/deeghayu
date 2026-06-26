@@ -261,11 +261,20 @@ export class MemberService {
       return { arrears: [], totalArrears: 0, monthlyFee: 0 };
     }
 
-    // Sync overdue status before computing arrears (only PENDING → OVERDUE; PARTIAL keeps its status)
+    // Sync overdue: PENDING → OVERDUE when past-due by dueDate OR when the payment month has already passed
     await pool.query(`
       UPDATE payments SET status = 'OVERDUE', "updatedAt" = NOW()
       WHERE "memberId" = $1 AND status = 'PENDING'
-        AND "dueDate" IS NOT NULL AND "dueDate" < NOW()
+        AND (
+          ("dueDate" IS NOT NULL AND "dueDate" < NOW())
+          OR (
+            type = 'MONTHLY_MEETING'
+            AND (
+              year < EXTRACT(YEAR FROM NOW())
+              OR (year = EXTRACT(YEAR FROM NOW()) AND month < EXTRACT(MONTH FROM NOW()))
+            )
+          )
+        )
     `, [memberId]);
 
     const [settingResult, paymentsResult] = await Promise.all([

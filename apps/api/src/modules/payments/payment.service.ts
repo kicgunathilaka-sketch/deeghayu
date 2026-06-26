@@ -315,8 +315,16 @@ export class PaymentService {
       UPDATE payments
       SET status = 'OVERDUE', "updatedAt" = NOW()
       WHERE status = 'PENDING'
-        AND "dueDate" IS NOT NULL
-        AND "dueDate" < NOW()
+        AND (
+          ("dueDate" IS NOT NULL AND "dueDate" < NOW())
+          OR (
+            type = 'MONTHLY_MEETING'
+            AND (
+              year < EXTRACT(YEAR FROM NOW())
+              OR (year = EXTRACT(YEAR FROM NOW()) AND month < EXTRACT(MONTH FROM NOW()))
+            )
+          )
+        )
     `);
   }
 
