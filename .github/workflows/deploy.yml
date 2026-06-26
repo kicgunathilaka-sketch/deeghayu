@@ -37,10 +37,6 @@ jobs:
       - name: Install dependencies
         run: npm ci --workspaces
 
-      - name: Generate Prisma client
-        working-directory: apps/api
-        run: npx prisma generate
-
       - name: TypeScript check (API)
         working-directory: apps/api
         run: npx tsc --noEmit
