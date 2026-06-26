@@ -1,5 +1,13 @@
 import PDFDocument from 'pdfkit';
+import path from 'path';
+import fs from 'fs';
 import { config } from '../config';
+
+// Logo is at apps/api/assets/logo.png — same relative path from src/utils/ and dist/utils/
+const LOGO_PATH = path.join(__dirname, '../../assets/logo.png');
+const LOGO_BUF: Buffer | null = (() => {
+  try { return fs.readFileSync(LOGO_PATH); } catch { return null; }
+})();
 
 interface ReceiptData {
   memberName: string;
@@ -21,6 +29,11 @@ export function generateReceiptPdf(data: ReceiptData): Promise<Buffer> {
     doc.on('error', reject);
 
     // Header
+    if (LOGO_BUF) {
+      const logoW = 48;
+      doc.image(LOGO_BUF, (doc.page.width - logoW) / 2, doc.y, { width: logoW, height: logoW });
+      doc.moveDown(3.2);
+    }
     doc.fillColor('#0284c7').fontSize(20).text(config.appName, { align: 'center' });
     doc.fillColor('#64748b').fontSize(10).text('Payment Receipt', { align: 'center' });
     doc.moveDown(0.5);
@@ -91,19 +104,21 @@ export function generateLetterPdf(data: LetterData): Promise<Buffer> {
     doc.rect(0, 110, W, 5).fill('#1d8cf8');
     doc.rect(0, 115, W, 2).fill('#e8f4ff');
 
-    // Logo placeholder circle
-    doc.circle(ML + 32, 55, 30).fillAndStroke('#1d5080', '#4a90c4').lineWidth(1.5);
-    doc.fillColor('#93c5ea').fontSize(7.5).font('Helvetica-Bold')
-       .text('LOGO', ML + 16, 50, { width: 32, align: 'center' });
+    // Logo
+    if (LOGO_BUF) {
+      doc.image(LOGO_BUF, ML, 18, { width: 72, height: 72 });
+    } else {
+      doc.circle(ML + 36, 54, 30).fillAndStroke('#1d5080', '#4a90c4').lineWidth(1.5);
+    }
 
     // Org name
     doc.fillColor('#ffffff').fontSize(17).font('Helvetica-Bold')
-       .text('Deeghayu Community Welfare Society', ML + 76, 30, { width: CW - 76 });
+       .text('Deeghayu Community Welfare Society', ML + 84, 28, { width: CW - 84 });
     doc.fillColor('#93c5ea').fontSize(10).font('Helvetica')
-       .text('Kotigala, Handapangoda.', ML + 76, 54, { width: CW - 76 });
+       .text('Kotigala, Handapangoda.', ML + 84, 52, { width: CW - 84 });
     // Tagline
     doc.fillColor('#6daed6').fontSize(8).font('Helvetica-Oblique')
-       .text('Building Community. Enriching Lives.', ML + 76, 70, { width: CW - 76 });
+       .text('Building Community. Enriching Lives.', ML + 84, 68, { width: CW - 84 });
 
     // ── Ref + Date row ──────────────────────────────────────
     let y = 132;

@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import logo from '../../assets/logo.png';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   LayoutDashboard, Users, CreditCard, Calendar, QrCode,
@@ -89,7 +90,7 @@ export default function Sidebar() {
                 exit={{ opacity: 0 }}
                 className="flex items-center gap-3"
               >
-                <span className="text-2xl">🌿</span>
+                <img src={logo} alt="Deeghayu" className="w-9 h-9 rounded-full shrink-0" />
                 <div>
                   <p className="text-white font-bold text-sm">Deeghayu</p>
                   <p className="text-slate-400 text-xs">Community</p>
@@ -97,7 +98,7 @@ export default function Sidebar() {
               </motion.div>
             )}
           </AnimatePresence>
-          {!sidebarOpen && <span className="text-2xl mx-auto">🌿</span>}
+          {!sidebarOpen && <img src={logo} alt="" className="w-9 h-9 rounded-full mx-auto" />}
 
           <button
             onClick={toggleSidebar}
