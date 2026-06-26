@@ -71,11 +71,11 @@ app.use(
   })
 );
 
-// Serve uploaded files — allow cross-origin loading (images in <img> tags from the web app)
+// Serve uploaded files from the configured volume path
 app.use('/uploads', (_req, res, next) => {
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   next();
-}, express.static(path.join(process.cwd(), 'uploads')));
+}, express.static(config.uploadPath));
 
 // Global rate limit
 app.use('/api', globalLimiter);

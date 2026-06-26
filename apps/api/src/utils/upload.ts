@@ -1,13 +1,9 @@
 import multer from 'multer';
 import sharp from 'sharp';
-import { v2 as cloudinary } from 'cloudinary';
+import path from 'path';
+import fs from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 import { config } from '../config';
-
-cloudinary.config({
-  cloud_name: config.cloudinary.cloudName,
-  api_key: config.cloudinary.apiKey,
-  api_secret: config.cloudinary.apiSecret,
-});
 
 export const upload = multer({
   storage: multer.memoryStorage(),
@@ -19,20 +15,26 @@ export const upload = multer({
 });
 
 export async function saveImage(buffer: Buffer, folder: string = 'general'): Promise<string> {
-  // Resize / convert to webp before uploading
-  const processed = await sharp(buffer)
+  const dir = path.join(config.uploadPath, folder);
+  fs.mkdirSync(dir, { recursive: true });
+
+  const filename = `${uuidv4()}.webp`;
+  const filepath = path.join(dir, filename);
+
+  await sharp(buffer)
     .resize(1200, 1200, { fit: 'inside', withoutEnlargement: true })
     .webp({ quality: 85 })
-    .toBuffer();
+    .toFile(filepath);
 
-  return new Promise((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      { folder: `deeghayu/${folder}`, resource_type: 'image', format: 'webp' },
-      (err, result) => {
-        if (err || !result) return reject(err ?? new Error('Cloudinary upload failed'));
-        resolve(result.secure_url);
-      }
-    );
-    stream.end(processed);
-  });
+  return `${config.appUrl}/uploads/${folder}/${filename}`;
+}
+
+export function deleteImage(url: string): void {
+  try {
+    const relative = url.replace(/^.*\/uploads\//, '');
+    const filepath = path.join(config.uploadPath, relative);
+    if (fs.existsSync(filepath)) fs.unlinkSync(filepath);
+  } catch {
+    // non-fatal — old Cloudinary URLs or missing files are fine
+  }
 }

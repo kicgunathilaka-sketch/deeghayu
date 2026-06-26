@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import path from 'path';
 dotenv.config();
 
 export const config = {
@@ -23,11 +24,7 @@ export const config = {
     from: process.env.EMAIL_FROM || 'Deeghayu Community <no-reply@deeghayu.org>',
   },
 
-  cloudinary: {
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
-    apiKey: process.env.CLOUDINARY_API_KEY || '',
-    apiSecret: process.env.CLOUDINARY_API_SECRET || '',
-  },
+  uploadPath: process.env.UPLOAD_PATH || path.join(process.cwd(), 'uploads'),
 
   isProduction: process.env.NODE_ENV === 'production',
   isDevelopment: process.env.NODE_ENV === 'development',
