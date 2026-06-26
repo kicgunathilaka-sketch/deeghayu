@@ -9,6 +9,7 @@ import { StatusBadge } from '../../components/ui/Badge';
 import { PageLoader, SkeletonCard } from '../../components/ui/Spinner';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { formatDate, downloadBlob } from '../../utils/formatters';
+import { resolveMediaUrl } from '../../utils/media';
 import { toast } from 'sonner';
 import { useDebounce } from '../../hooks/useDebounce';
 
@@ -102,7 +103,7 @@ export default function MembersPage() {
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center shrink-0">
                           {member.profilePhoto ? (
-                            <img src={member.profilePhoto} alt="" className="w-9 h-9 rounded-full object-cover" />
+                            <img src={resolveMediaUrl(member.profilePhoto)} alt="" className="w-9 h-9 rounded-full object-cover" />
                           ) : (
                             <span className="text-primary-600 font-semibold text-sm">{member.fullName[0]}</span>
                           )}

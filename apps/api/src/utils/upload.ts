@@ -26,7 +26,7 @@ export async function saveImage(buffer: Buffer, folder: string = 'general'): Pro
     .webp({ quality: 85 })
     .toFile(filepath);
 
-  return `${config.appUrl}/uploads/${folder}/${filename}`;
+  return `/uploads/${folder}/${filename}`;
 }
 
 export function deleteImage(url: string): void {

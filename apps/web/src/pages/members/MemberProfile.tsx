@@ -15,6 +15,7 @@ import { StatusBadge } from '../../components/ui/Badge';
 import { PageLoader } from '../../components/ui/Spinner';
 import { formatDate, formatCurrency, formatRole } from '../../utils/formatters';
 import { uploadImage } from '../../utils/uploadImage';
+import { resolveMediaUrl } from '../../utils/media';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 
@@ -308,7 +309,7 @@ export default function MemberProfilePage() {
           <div className="relative mb-4">
             <div className="w-24 h-24 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center overflow-hidden">
               {member.profilePhoto ? (
-                <img src={member.profilePhoto} alt="" className="w-24 h-24 rounded-full object-cover" />
+                <img src={resolveMediaUrl(member.profilePhoto)} alt="" className="w-24 h-24 rounded-full object-cover" />
               ) : (
                 <span className="text-4xl font-bold text-primary-600">{member.fullName[0]}</span>
               )}
@@ -768,7 +769,7 @@ export default function MemberProfilePage() {
                 <SignaturePad onSave={handleSaveSig} onCancel={() => setShowSigPad(false)} />
               ) : member.signatureUrl ? (
                 <div className="border border-surface-200 dark:border-surface-600 rounded-xl p-3 bg-white dark:bg-surface-800">
-                  <img src={member.signatureUrl} alt="Digital signature" className="max-h-24 object-contain" />
+                  <img src={resolveMediaUrl(member.signatureUrl)} alt="Digital signature" className="max-h-24 object-contain" />
                 </div>
               ) : (
                 <p className="text-sm text-slate-400">No signature added yet.</p>

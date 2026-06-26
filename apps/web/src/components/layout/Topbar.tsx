@@ -6,6 +6,7 @@ import { useAuthStore } from '../../store/authStore';
 import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../../api/notifications.api';
 import { formatDate } from '../../utils/formatters';
+import { resolveMediaUrl } from '../../utils/media';
 
 export default function Topbar() {
   const { toggleSidebar, toggleTheme, theme } = useUiStore();
@@ -159,7 +160,7 @@ export default function Topbar() {
         >
           <div className="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center overflow-hidden">
             {user?.member?.profilePhoto ? (
-              <img src={user.member.profilePhoto} alt="" className="w-8 h-8 object-cover" />
+              <img src={resolveMediaUrl(user.member.profilePhoto)} alt="" className="w-8 h-8 object-cover" />
             ) : (
               <span className="text-white text-sm font-medium">
                 {user?.member?.fullName?.[0] || user?.email?.[0] || '?'}

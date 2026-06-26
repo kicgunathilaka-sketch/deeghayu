@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Trophy, Search, TrendingUp, CalendarCheck, CreditCard, Medal } from 'lucide-react';
 import { performanceApi } from '../../api/performance.api';
 import { PageLoader } from '../../components/ui/Spinner';
+import { resolveMediaUrl } from '../../utils/media';
 
 const GRADE_BG: Record<string, string> = {
   Excellent: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
@@ -105,7 +106,7 @@ export default function PerformancePage() {
               {/* Avatar */}
               <div className="w-16 h-16 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center overflow-hidden mt-2">
                 {m.profilePhoto
-                  ? <img src={m.profilePhoto} alt="" className="w-full h-full object-cover" />
+                  ? <img src={resolveMediaUrl(m.profilePhoto)} alt="" className="w-full h-full object-cover" />
                   : <span className="text-2xl font-bold text-primary-600">{m.fullName[0]}</span>
                 }
               </div>
@@ -160,7 +161,7 @@ export default function PerformancePage() {
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center overflow-hidden shrink-0">
                       {m.profilePhoto
-                        ? <img src={m.profilePhoto} alt="" className="w-full h-full object-cover" />
+                        ? <img src={resolveMediaUrl(m.profilePhoto)} alt="" className="w-full h-full object-cover" />
                         : <span className="text-sm font-bold text-primary-600">{m.fullName[0]}</span>
                       }
                     </div>
